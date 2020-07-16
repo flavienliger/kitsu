@@ -1,8 +1,8 @@
 <template>
 <div class="data-list">
-  <div class="table-header-wrapper">
-    <table class="table table-header" ref="headerWrapper">
-      <thead ref="thead">
+  <div ref="body" class="datatable-wrapper" v-scroll="onBodyScroll">
+    <table class="datatable">
+      <thead ref="thead" class="datatable-head">
         <tr>
           <th class="thumbnail" ref="th-thumbnail">
           </th>
@@ -53,32 +53,16 @@
           </th>
         </tr>
       </thead>
-    </table>
-  </div>
 
-  <table-info
-    :is-loading="isLoading"
-    :is-error="isError"
-  />
-
-  <div
-    ref="body"
-    class="table-body"
-    v-scroll="onBodyScroll"
-    v-if="!isLoading"
-  >
-    <table
-      class="table unselectable"
-    >
       <tbody
-        class="tbody"
-        ref="body-tbody"
+        class="datatable-body"
       >
         <tr
           :ref="'task-' + task.id"
           :key="task.id"
           :class="{
             'task-line': true,
+            'datatable-row': true,
             selected: selectionGrid[task.id]
           }"
           @click="selectTask($event, index, task)"
@@ -89,6 +73,8 @@
               :entity="getEntity(task.entity.id)"
               :width="50"
               :height="33"
+              :empty-width="50"
+              :empty-height="33"
             />
           </td>
           <td class="asset-type" v-if="isAssets">
@@ -124,7 +110,16 @@
             {{ getEntity(task.entity.id).nb_frames }}
           </td>
           <td class="estimation">
-            {{ formatEstimation(task.estimation) }}
+            <input
+              v-if="selectionGrid[task.id]"
+              :ref="task.id + '-estimation'"
+              class="input"
+              @change="updateEstimation($event.target.value)"
+              :value="formatEstimation(task.estimation)"
+            />
+            <span v-else>
+              {{ formatEstimation(task.estimation) }}
+            </span>
           </td>
           <td :class="{
             duration: true,
@@ -141,10 +136,35 @@
             </span>
           </td>
           <td class="start-date">
-            {{ formatDate(task.start_date) }}
+            <datepicker
+              v-if="selectionGrid[task.id]"
+              wrapper-class="datepicker"
+              input-class="date-field input"
+              :language="locale"
+              :monday-first="true"
+              :value="getDate(task.start_date)"
+              format="yyyy-MM-dd"
+              @input="updateStartDate"
+            />
+            <span v-else>
+              {{ formatDate(task.start_date) }}
+            </span>
           </td>
           <td class="due-date">
-            {{ formatDate(task.due_date) }}
+            <datepicker
+              v-if="selectionGrid[task.id]"
+              wrapper-class="datepicker"
+              input-class="date-field input"
+              :language="locale"
+              :monday-first="true"
+              :value="getDate(task.due_date)"
+              format="yyyy-MM-dd"
+              @input="updateDueDate"
+            />
+            <span v-else>
+              {{ formatDate(task.due_date) }}
+            </span>
+
           </td>
           <td class="real-start-date">
             {{ formatDate(task.real_start_date) }}
@@ -162,13 +182,21 @@
     </table>
   </div>
 
+  <table-info
+    :is-loading="isLoading"
+    :is-error="isError"
+  />
+
   <p
     class="has-text-centered nb-tasks"
     v-if="!isLoading"
   >
     {{ tasks.length }} {{ $tc('tasks.number', tasks.length) }}
-    ({{ formatDuration(timeSpent) }}
-     {{ $tc('main.days_spent', Math.floor((timeSpent ? timeSpent : 0) / 60) / 8) }}<span v-if="!isAssets">, {{ nbFrames }} {{ $tc('main.nb_frames', nbFrames) }}</span>)
+    ({{ formatDuration(timeEstimated) }}
+     {{ $tc('main.days_estimated', isTimeEstimatedPlural) }},
+     {{ formatDuration(timeSpent) }}
+     {{ $tc('main.days_spent', isTimeSpentPlural) }}<span v-if="!isAssets">,
+     {{ nbFrames }} {{ $tc('main.nb_frames', nbFrames) }}</span>)
   </p>
 </div>
 </template>
@@ -177,9 +205,18 @@
 import Vue from 'vue'
 import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment-timezone'
-import { range } from '../../lib/time'
+import {
+  daysToMinutes,
+  getDatesFromStartDate,
+  getDatesFromEndDate,
+  minutesToDays,
+  range
+} from '../../lib/time'
 import { formatListMixin } from './format_mixin'
+import { domMixin } from '@/components/mixins/dom'
 
+import Datepicker from 'vuejs-datepicker'
+import { en, fr } from 'vuejs-datepicker/dist/locale'
 import EntityThumbnail from '../widgets/EntityThumbnail'
 import TableInfo from '../widgets/TableInfo'
 import PeopleAvatar from '../widgets/PeopleAvatar'
@@ -187,9 +224,10 @@ import ValidationCell from '../cells/ValidationCell'
 
 export default {
   name: 'task-list',
-  mixins: [formatListMixin],
+  mixins: [domMixin, formatListMixin],
 
   components: {
+    Datepicker,
     EntityThumbnail,
     PeopleAvatar,
     TableInfo,
@@ -200,7 +238,8 @@ export default {
     return {
       lastSelection: null,
       page: 1,
-      selectionGrid: {}
+      selectionGrid: {},
+      selectedDate: moment().toDate() // By default current day.
     }
   },
 
@@ -241,16 +280,30 @@ export default {
       'assetMap',
       'nbSelectedTasks',
       'personMap',
+      'user',
       'selectedTasks',
-      'shotMap'
+      'shotMap',
+      'taskMap'
     ]),
 
     timeSpent () {
-      let total = 0
-      this.tasks.forEach(task => {
-        total += task.duration
-      })
-      return total
+      return this.tasks.reduce((acc, task) => acc + task.duration, 0)
+    },
+
+    isTimeSpentPlural () {
+      return Math.floor(
+        (this.timeSpent ? this.timeSpent : 0) / 60 / 8
+      ) <= 1
+    },
+
+    timeEstimated () {
+      return this.tasks.reduce((acc, task) => acc + task.estimation, 0)
+    },
+
+    isTimeEstimatedPlural () {
+      return Math.floor(
+        (this.timeEstimated ? this.timeEstimated : 0) / 60 / 8
+      ) <= 1
     },
 
     nbFrames () {
@@ -268,6 +321,14 @@ export default {
       } else {
         return []
       }
+    },
+
+    locale () {
+      if (this.user.locale === 'fr_FR') {
+        return fr
+      } else {
+        return en
+      }
     }
   },
 
@@ -276,19 +337,51 @@ export default {
       'addSelectedTask',
       'addSelectedTasks',
       'clearSelectedTasks',
+      'updateTask',
       'removeSelectedTask'
     ]),
 
+    getDate (date) {
+      return date ? moment(date, 'YYYY-MM-DD').toDate() : null
+    },
+
     formatEstimation (estimation) {
-      if (estimation) {
-        if (estimation < 10) {
-          return estimation
-        } else {
-          return this.formatDuration(estimation)
-        }
-      } else {
-        return 0
-      }
+      return estimation ? this.formatDuration(estimation) : 0
+    },
+
+    updateEstimation (days) {
+      const estimation = daysToMinutes(this.organisation, days)
+      this.updateTasksEstimation({ estimation })
+    },
+
+    updateStartDate (date) {
+      Object.keys(this.selectionGrid).forEach(taskId => {
+        const task = this.taskMap[taskId]
+        const startDate = moment(date)
+        const dueDate = task.due_date ? moment(task.due_date) : null
+        const data = getDatesFromStartDate(
+          startDate,
+          dueDate,
+          minutesToDays(this.organisation, task.estimation)
+        )
+        this.updateTask({ taskId, data })
+          .catch(console.error)
+      })
+    },
+
+    updateDueDate (date) {
+      Object.keys(this.selectionGrid).forEach(taskId => {
+        const task = this.taskMap[taskId]
+        const startDate = task.start_date ? moment(task.start_date) : null
+        const dueDate = moment(date)
+        const data = getDatesFromEndDate(
+          startDate,
+          dueDate,
+          minutesToDays(this.organisation, task.estimation)
+        )
+        this.updateTask({ taskId, data })
+          .catch(console.error)
+      })
     },
 
     formatDate (date) {
@@ -303,7 +396,6 @@ export default {
     },
 
     onBodyScroll (event, position) {
-      this.$refs.headerWrapper.style.left = `-${position.scrollLeft}px`
       this.$emit('scroll', position.scrollTop)
       const maxHeight =
         this.$refs.body.scrollHeight - this.$refs.body.offsetHeight
@@ -334,6 +426,12 @@ export default {
     },
 
     selectTask (event, index, task) {
+      if (event && event.target && (
+        // Dirty hack needed to make date picker and inputs work properly
+        ['INPUT'].includes(event.target.nodeName) ||
+        ['HEADER'].includes(event.target.parentNode.nodeName) ||
+        ['cell day selected'].includes(event.target.className)
+      )) return
       const isSelected = this.selectionGrid[task.id]
       const isManySelection = Object.keys(this.selectionGrid).length > 1
       if (!event.ctrlKey && !event.shiftKey) {
@@ -402,27 +500,6 @@ export default {
       this.lastSelection = null
     },
 
-    resizeHeaders () {
-      if (
-        this.$refs['body-tbody'] &&
-        this.$refs['body-tbody'].children.length > 0
-      ) {
-        const bodyElement = this.$refs['body-tbody'].children[0]
-        const columnDescriptors = [
-          { index: 1, name: 'type' },
-          { index: 2, name: 'name' },
-          { index: 4, name: 'assignees' }
-        ]
-        columnDescriptors.forEach(desc => {
-          const width = Math.max(
-            bodyElement.children[desc.index].offsetWidth,
-            100
-          )
-          this.$refs['th-' + desc.name].style['min-width'] = `${width}px`
-        })
-      }
-    },
-
     getTableData () {
       const headers = [
         this.isAssets ? this.$t('tasks.fields.asset_type') : this.$t('tasks.fields.sequence'),
@@ -465,6 +542,25 @@ export default {
         taskLines.push(line)
       })
       return taskLines
+    },
+
+    updateTasksEstimation ({ estimation }) {
+      Object.keys(this.selectionGrid).forEach(taskId => {
+        const task = this.taskMap[taskId]
+        let data = { estimation }
+        if (task.start_date) {
+          const startDate = moment(task.start_date)
+          const dueDate = task.due_date ? moment(task.due_date) : null
+          data = getDatesFromStartDate(
+            startDate,
+            dueDate,
+            minutesToDays(this.organisation, estimation)
+          )
+          data.estimation = estimation
+        }
+        this.updateTask({ taskId, data })
+          .catch(console.error)
+      })
     }
   },
 
@@ -483,14 +579,10 @@ export default {
 </script>
 
 <style scoped lang="scss">
-.dark .table-body tr.task-line.selected {
-  background: $dark-purple;
-}
-
 .thumbnail {
   min-width: 80px;
-  width: 80px;
   max-width: 80px;
+  width: 80px;
 }
 
 .asset-type {
@@ -515,8 +607,8 @@ export default {
 }
 
 .assignees {
-  min-width: 130px;
-  width: 130px;
+  min-width: 100px;
+  width: 100px;
 }
 
 .frames,
@@ -532,8 +624,9 @@ export default {
 .due-date,
 .start-date,
 .real-end-date {
-  min-width: 130px;
-  width: 130px;
+  min-width: 110px;
+  max-width: 110px;
+  width: 110px;
 }
 
 .retake-count {
@@ -569,10 +662,40 @@ td.retake-count {
   }
 }
 
-.table-body {
+.datatable-head {
+  th {
+    padding-left: 0;
+
+    &.retake-count {
+      padding-right: 1em;
+    }
+
+    &.status {
+      padding-left: 1em;
+      padding-right: 1em;
+    }
+  }
+}
+
+.input {
+  padding: 0.5em
+}
+
+.datatable-wrapper {
+  min-height: calc(100% - 50px);
+}
+
+.datatable-body {
+  overflow-x: auto;
+  min-height: 100%;
+
   td,
   tr {
     padding: 0;
+
+    &.thumbnail {
+      padding-left: 0.4em;
+    }
   }
 
   td.retake-count {
@@ -586,11 +709,6 @@ td.retake-count {
 
   tr.task-line {
     cursor: pointer;
-
-    &.selected {
-      border: 0;
-      background: $purple;
-    }
   }
 }
 </style>

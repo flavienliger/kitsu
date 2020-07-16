@@ -61,10 +61,10 @@
 
       <div
         class="playlist-column no-selection"
-        v-if="playlists.length > 0 && !currentPlaylist.id"
+        v-if="playlists.length > 0 && !currentPlaylist.id && !loading.playlist"
       >
         <h2>{{ $t('playlists.last_creation') }}</h2>
-        <div class="flexrow" v-if="!loading.playlists">
+        <div class="flexrow" v-if="!loading.playlists && !loading.playlistsInit">
           <router-link
             class="recent-playlist flexrow-item"
             :key="'recent-playlist-' + playlist.id"
@@ -115,7 +115,7 @@
         class="playlist-column no-selection has-text-centered"
         v-else-if="playlists.length === 0"
       >
-        <div v-if="!loading.playlists">
+        <div v-if="!loading.playlists && !loading.playlistsInit">
           <p class="empty-explaination">
             {{ $t('playlists.no_playlist') }}
           </p>
@@ -155,7 +155,7 @@
         />
 
         <div
-          v-if="isCurrentUserManager && isAddingEntity"
+          v-if="isCurrentUserManager && isAddingEntity && !loading.playlist"
         >
           <div class="addition-header">
             <div class="flexrow">
@@ -296,7 +296,7 @@
                   class="entity-group-title"
                   v-if="sequenceShots.length > 0"
                 >
-                   {{ sequenceShots[0].sequence_name }}
+                  {{ sequenceShots[0].sequence_name }}
                   <button
                     class="button"
                     @click="addSequence(sequenceShots)"
@@ -384,7 +384,7 @@ export default {
 
   data () {
     return {
-      currentPlaylist: { name: this.$t('playlists.no_selection') },
+      currentPlaylist: { name: '' },
       currentSort: 'updated_at',
       sortOptions: [
         'updated_at',
@@ -392,7 +392,7 @@ export default {
         'name'
       ].map(name => ({ label: name, value: name })),
       currentEntities: {},
-      isAddingEntity: true,
+      isAddingEntity: false,
       sortedPlaylists: [],
       playlistToEdit: {
         name: `${moment().format('YYYY-MM-DD HH:mm:ss')}`,
@@ -412,7 +412,8 @@ export default {
         deletePlaylist: false,
         editPlaylist: false,
         playlist: false,
-        playlists: true
+        playlists: false,
+        playlistsInit: true
       },
       errors: {
         addPlaylist: false,
@@ -563,7 +564,8 @@ export default {
           this.displayedShots[0].episode_id !== this.currentEpisode.id
         )
       ) {
-        if (this.currentEpisode &&
+        if (this.isTVShow &&
+            this.currentEpisode &&
             (this.currentEpisode.id === 'main' ||
             this.currentEpisode.id === 'all')) {
           callback()
@@ -583,7 +585,7 @@ export default {
       }
     },
 
-    loadPlaylistsData () {
+    loadPlaylistsData (callback) {
       const setFirstPlaylist = () => {
         this.setCurrentPlaylist(() => {
           if (!this.currentPlaylist || !this.currentPlaylist.id) {
@@ -592,15 +594,14 @@ export default {
         })
       }
       if (this.playlists.length === 0) {
-        this.loading.playlists = true
         this.loadPlaylists((err) => {
           if (err) this.errors.loadPlaylists = true
-          this.loading.playlists = false
           if (!err) setFirstPlaylist()
+          if (callback) callback()
         })
       } else {
-        this.loading.playlists = false
         setFirstPlaylist()
+        if (callback) callback()
       }
     },
 
@@ -659,21 +660,21 @@ export default {
     setCurrentPlaylist (callback) {
       const playlistId = this.$route.params.playlist_id
       const playlist = this.playlistMap[playlistId]
-      this.loading.playlist = true
       if (playlist) {
+        this.loading.playlist = true
         this.loadPlaylist({
           playlist,
           callback: (err, playlist) => {
-            this.loading.playlist = false
             if (err) console.error(err)
             this.currentPlaylist = playlist
             this.rebuildCurrentEntities()
+            this.loading.playlist = false
             if (callback) callback()
           }
         })
       } else {
         this.currentPlaylist = {
-          name: this.$t('playlists.no_selection')
+          name: ''
         }
         this.currentShots = {}
       }
@@ -1003,20 +1004,33 @@ export default {
     // Loading
 
     reloadAll () {
-      this.loadShotsData(() => {
-        this.loadAssetsData()
-          .then(() => {
-            this.loadPlaylistsData(() => {
-              this.resetPlaylist()
+      if (!this.loading.playlists) {
+        this.loading.playlists = true
+        this.loadShotsData(() => {
+          this.loadAssetsData()
+            .then(() => {
+              this.loadPlaylistsData(() => {
+                this.loading.playlists = false
+                this.resetPlaylist()
+                setTimeout(() => {
+                  this.loading.playlistsInit = false
+                }, 300)
+              })
             })
-          })
-      })
+        })
+      }
     }
   },
 
   mounted () {
-    this.reloadAll()
-    this.resetSorting()
+    // Next tick needed to ensure that current production is properly set.
+    this.$nextTick(() => {
+      this.reloadAll()
+      if (localStorage.getItem('playlist-sort')) {
+        this.currentSort = localStorage.getItem('playlist-sort')
+      }
+      this.resetSorting()
+    })
   },
 
   watch: {
@@ -1050,6 +1064,7 @@ export default {
     },
 
     currentSort () {
+      localStorage.setItem('playlist-sort', this.currentSort)
       this.resetSorting()
     }
   },
@@ -1200,7 +1215,7 @@ export default {
   color: $grey-strong;
 
   &.for-client {
-    background: $purple-light;
+    background: $light-purple;
     border: 1px solid $purple;
   }
 }

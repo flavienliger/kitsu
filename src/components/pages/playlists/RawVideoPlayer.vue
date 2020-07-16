@@ -42,6 +42,10 @@ export default {
     isRepeating: {
       type: Boolean,
       default: false
+    },
+    name: { // Debug purpose
+      type: String,
+      default: 'main'
     }
   },
 
@@ -135,11 +139,11 @@ export default {
       }
     },
 
-    resetHeight () {
+    resetHeight (height) {
       this.$nextTick(() => {
         if (this.currentPlayer) this.currentPlayer.style.height = '0px'
         if (this.nextPlayer) this.nextPlayer.style.height = '0px'
-        const height = this.container.offsetHeight
+        height = height || this.container.offsetHeight
         if (this.currentPlayer) this.currentPlayer.style.height = `${height}px`
         if (this.nextPlayer) this.nextPlayer.style.height = `${height}px`
       })
@@ -150,7 +154,11 @@ export default {
     getNextIndex (index) {
       let i = index + 1 >= this.entities.length ? 0 : index + 1
       // While we don't come back to initial entity and we have video previews
-      while (i !== index && this.entities[i] && this.entities[i].preview_file_extension !== 'mp4') {
+      while (
+        i !== index &&
+        this.entities[i] &&
+        this.entities[i].preview_file_extension !== 'mp4'
+      ) {
         i++
         if (i >= this.entities.length) i = 0
       }
@@ -168,11 +176,13 @@ export default {
     },
 
     goPreviousFrame () {
-      const newTime = this.currentPlayer.currentTime - 1 / this.fps
-      if (newTime < 0) {
-        this.setCurrentTime(0)
-      } else {
-        this.setCurrentTime(newTime)
+      if (this.currentPlayer) {
+        const newTime = this.currentPlayer.currentTime - 1 / this.fps
+        if (newTime < 0) {
+          this.setCurrentTime(0)
+        } else {
+          this.setCurrentTime(newTime)
+        }
       }
     },
 
@@ -193,7 +203,8 @@ export default {
     },
 
     loadNextEntity () {
-      this.loadEntity(this.getNextIndex(this.currentIndex))
+      const newIndex = this.getNextIndex(this.currentIndex)
+      this.loadEntity(newIndex)
       this.$emit('entity-change', this.currentIndex)
     },
 
@@ -273,7 +284,11 @@ export default {
     },
 
     getCurrentTime () {
-      return this.currentPlayer.currentTime
+      if (this.currentPlayer) {
+        return this.currentPlayer.currentTime
+      } else {
+        return 0
+      }
     },
 
     setCurrentTime (currentTime) {

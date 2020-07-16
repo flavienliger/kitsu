@@ -14,6 +14,7 @@
 <script>
 import { mapGetters, mapActions } from 'vuex'
 import Spinner from './components/widgets/Spinner.vue'
+import crisp from './lib/crisp'
 
 export default {
   name: 'app',
@@ -54,6 +55,7 @@ export default {
       document.documentElement.style.background = '#FFF'
       document.body.style.background = '#FFF'
     }
+    crisp.init()
   },
 
   metaInfo: {
@@ -371,6 +373,7 @@ body {
   min-height: 100%;
   width: 100%;
   background: #EEE;
+  overflow: auto;
 }
 
 * {
@@ -381,6 +384,7 @@ body {
 }
 
 .dark {
+
   .hero {
     background-color: $dark-grey;
   }
@@ -477,49 +481,6 @@ body {
     color: #DDD;
   }
 
-  .table-header tr:hover {
-    background: transparent;
-  }
-
-  .table-header,
-  .table-body .table tr:nth-child(odd) {
-    color: $white-grey;
-    background: #36393F;
-  }
-
-  .table-body .table tr:nth-child(even) {
-    color: $white-grey;
-    background: #46494F;
-  }
-
-  .table-header th {
-    color: $white-grey;
-    border-color: #666666;
-  }
-
-  .table-body td {
-    border-color: #25282E;
-  }
-
-  .table-body .table tr:hover {
-    color: $white-grey;
-    background: #5E6169;
-  }
-
-  .table tr.type-header {
-    border: 1px solid #36393F;
-    font-size: 1.1em;
-  }
-
-  .table tr.type-header:hover {
-    background: #36393F;
-  }
-
-  .table tr.type-header td {
-    font-weight: bold;
-    padding-left: 0.3em;
-  }
-
   .splitted-table {
     border-left: 1px solid #36393F;
 
@@ -599,30 +560,37 @@ body {
     background-color: #5E6169;
   }
 
-  .project-dates .vdp-datepicker__calendar,
-  .current-date .datepicker .vdp-datepicker__calendar {
+  .vdp-datepicker__calendar {
     background-color: #36393F;
     border-color: #25282E;
-    z-index: 150;
-  }
-  .project-dates .datepicker .vdp-datepicker__calendar .prev,
-  .project-dates .datepicker .vdp-datepicker__calendar .next,
-  .project-dates .datepicker .vdp-datepicker__calendar .day__month_btn,
-  .current-date .datepicker .vdp-datepicker__calendar header span:hover {
-    background: #36393F;
-  }
-  .project-dates .datepicker .vdp-datepicker__calendar header .prev::after,
-  .current-date .datepicker .vdp-datepicker__calendar header .prev::after {
-    border-right-color: #EEE;
-  }
-  .project-dates .datepicker .vdp-datepicker__calendar header .next::after,
-  .current-date .datepicker .vdp-datepicker__calendar header .next::after {
-    border-left-color: #EEE;
-  }
 
-  .projects-dates .datepicker .vdp-datepicker__calendar header .next.disabled::after,
-  .current-date .datepicker .vdp-datepicker__calendar header .next.disabled::after {
-    border-left-color: #666;
+    .prev,
+    .next,
+    .day__month_btn,
+    header span:hover {
+      background: #36393F;
+    }
+
+    header .prev::after,
+    header .prev::after {
+      border-right-color: #EEE;
+    }
+
+    header .next::after,
+    header .next::after {
+      border-left-color: #EEE;
+    }
+
+    header .next.disabled::after,
+    header .next.disabled::after {
+      border-left-color: #666;
+    }
+
+    .cell.year.disabled,
+    .cell.month.disabled,
+    .cell.day.disabled {
+      color: $grey;
+    }
   }
 
   .hero .control .icon {
@@ -772,6 +740,10 @@ a:hover {
   margin-right: 1em;
 }
 
+.mt05 {
+  margin-top: 0.5em;
+}
+
 .mt1 {
   margin-top: 1em;
 }
@@ -790,6 +762,18 @@ a:hover {
 
 .mb0 {
   margin-bottom: 0;
+}
+
+.mb05 {
+  margin-bottom: 0.5em;
+}
+
+.mb1 {
+  margin-bottom: 1em;
+}
+
+.mb2 {
+  margin-bottom: 2em;
 }
 
 .filler {
@@ -1085,12 +1069,8 @@ textarea.input:focus {
   margin-top: 1em;
 }
 
-.table-body .table tr:nth-child(even) {
-  background: #F6F6F6;
-}
-
 .table-body .table tr:hover {
-  background: $light-green-lightest;
+  background: $light-purple;
 }
 
 .table tr.type-header {
@@ -1187,7 +1167,7 @@ tbody:last-child .empty-line:last-child {
     .thumbnail-wrapper,
     .thumbnail-picture,
     .thumbnail-picture.thumbnail-empty {
-      margin: .35rem .35rem .35rem 0;
+      margin: 0 .35rem 0 0;
     }
 
     .thumbnail-wrapper {
@@ -1280,10 +1260,11 @@ tbody:last-child .empty-line:last-child {
     }
   }
 
-  &.selected {
+  &.datatable-row.selected {
     &,
     & .datatable-row-header,
     &:hover,
+    &:hover .datatable-row-header--no-bd,
     &:hover .datatable-row-header {
       background-color: var(--background-selected);
     }
@@ -1312,6 +1293,18 @@ tbody:last-child .empty-line:last-child {
     max-width: 30px;
     width: 30px;
     padding: .3rem;
+  }
+
+  .numeric-cell {
+    min-width: 80px;
+    max-width: 80px;
+    width: 80px;
+  }
+
+  .input.stylehidden {
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
   }
 }
 
@@ -1474,6 +1467,11 @@ tbody:last-child .empty-line:last-child {
   display: flex;
   flex-direction: row;
   padding: 0;
+  margin: 0;
+}
+
+.columns:last-child {
+  margin: 0;
 }
 
 .column {
@@ -1499,17 +1497,21 @@ tbody:last-child .empty-line:last-child {
 }
 
 .side-column {
-  width: 400px;
-  max-width: 400px;
-  margin-top: 70px;
   background: white;
-  margin-right: 10px;
-  margin-bottom: 10px;
+  margin-top: 60px;
+  max-width: 400px;
+  width: 400px;
 }
 
 .empty-list {
   margin-top: 2em;
   font-size: 1.5em;
+}
+
+th.validation-cell {
+  &:hover {
+    text-decoration: underline $light-grey;
+  }
 }
 
 .tooltip {
@@ -1687,17 +1689,38 @@ tbody:last-child .empty-line:last-child {
   }
 }
 
-.project-dates .vdp-datepicker__calendar .cell.day.selected,
-.current-date .datepicker .vdp-datepicker__calendar .cell.day.selected {
-  background: $purple;
-}
-.project-dates .vdp-datepicker__calendar .cell.day:not(.blank):not(.disabled):hover,
-.current-date .datepicker .vdp-datepicker__calendar .cell.day:not(.blank):not(.disabled):hover {
-  border: 1px solid $light-green;
-}
-.project-dates .vdp-datepicker__calendar .cell.day.disabled:hover,
-.current-date .datepicker .vdp-datepicker__calendar .cell.day.disabled:hover {
-  border: 1px solid transparent;
+.theme .datepicker .vdp-datepicker__calendar {
+  z-index: 200;
+
+  .cell.year:not(.blank):not(.disabled):hover,
+  .cell.month:not(.blank):not(.disabled):hover,
+  .cell.day:not(.blank):not(.disabled):hover {
+    background: var(--background-selectable);
+    border: 1px solid transparent;
+  }
+
+  .cell.year.disabled:hover,
+  .cell.month.disabled:hover,
+  .cell.day.disabled:hover {
+    border: 1px solid transparent;
+  }
+
+  .cell.year.selected,
+  .cell.month.selected,
+  .cell.day.selected {
+    background: var(--background-selected);
+  }
+
+  .cell.year.selected:not(.blank):not(.disabled):hover,
+  .cell.month.selected:not(.blank):not(.disabled):hover,
+  .cell.day.selected:not(.blank):not(.disabled):hover {
+    border: 1px solid transparent;
+    background: var(--background-selected);
+  }
+
+  header span:not(.disabled):hover {
+    background: var(--background-selectable);
+  }
 }
 
 .c-mask {
@@ -1734,6 +1757,30 @@ tbody:last-child .empty-line:last-child {
   display: inline-block;
   background: $white-grey;
   border-radius: 50%;
+}
+
+.asset-text {
+  background: var(--background-tag);
+  color: var(--text);
+  border-radius: 0.9em;
+  cursor: default;
+  font-size: 0.8em;
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+  padding: 0.2em 0.6em;
+
+  .asset-text-name {
+    margin-right: 0;
+  }
+
+  .modify-asset {
+    background: var(--background-tag-button);
+    border-radius: 0.9em;
+    cursor: pointer;
+    font-size: 0.7em;
+    padding: 0.3em 0.5em;
+    margin-left: 0.5em;
+  }
 }
 
 @media screen and (max-width: 1000px) {

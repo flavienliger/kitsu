@@ -7,12 +7,16 @@ export const range = (start, end) => {
     .map(i => i + start)
 }
 
+export const parseDate = (date) => {
+  return moment.tz(date, 'YYYY-MM-DDTHH:mm:ss', 'UTC')
+}
+
 export const formatDate = (date) => {
   const utcDate = moment.tz(date, 'UTC')
   if (moment().diff(utcDate, 'days') > 1) {
     return utcDate.format('YYYY-MM-DD HH:mm')
   } else {
-    return moment(utcDate.format()).fromNow()
+    return utcDate.fromNow()
   }
 }
 
@@ -79,4 +83,99 @@ export const getEndDateFromString = (startDate, endDateString) => {
   } else {
     return startDate.clone().add('days', 1)
   }
+}
+
+export const formatSimpleDate = (date) => {
+  return moment(date).format('YYYY-MM-DD')
+}
+
+export const getDatesFromStartDate = (startDate, dueDate, estimation) => {
+  if (estimation && estimation > 0) {
+    dueDate = addBusinessDays(startDate, Math.ceil(estimation))
+  }
+
+  if (!startDate || !dueDate) {
+    const start = startDate ? formatSimpleDate(startDate) || startDate : null
+    const end = dueDate ? formatSimpleDate(dueDate) || dueDate : null
+    return {
+      start_date: start,
+      due_date: end
+    }
+  } else if (startDate.isAfter(dueDate)) {
+    return {
+      start_date: formatSimpleDate(startDate),
+      due_date: formatSimpleDate(startDate)
+    }
+  } else {
+    return {
+      start_date: formatSimpleDate(startDate),
+      due_date: formatSimpleDate(dueDate)
+    }
+  }
+}
+
+export const getDatesFromEndDate = (startDate, dueDate, estimation) => {
+  if (estimation && estimation > 0) {
+    startDate = removeBusinessDays(dueDate, Math.ceil(estimation))
+  }
+
+  if (!startDate || !dueDate) {
+    const start = startDate ? formatSimpleDate(startDate) || startDate : null
+    const end = dueDate ? formatSimpleDate(dueDate) || dueDate : null
+    return {
+      start_date: start,
+      due_date: end
+    }
+  } else if (startDate.isAfter(dueDate)) {
+    return {
+      start_date: formatSimpleDate(dueDate),
+      due_date: formatSimpleDate(dueDate)
+    }
+  } else {
+    return {
+      start_date: formatSimpleDate(startDate),
+      due_date: formatSimpleDate(dueDate)
+    }
+  }
+}
+
+export const addBusinessDays = (originalDate, numDaysToAdd) => {
+  const Sunday = 0
+  const Saturday = 6
+  let daysRemaining = numDaysToAdd
+  const newDate = originalDate.clone()
+
+  while (daysRemaining > 0) {
+    newDate.add(1, 'days')
+    if (newDate.day() !== Sunday && newDate.day() !== Saturday) {
+      daysRemaining--
+    }
+  }
+
+  return newDate
+}
+
+export const removeBusinessDays = (originalDate, numDaysToRemove) => {
+  const Sunday = 0
+  const Saturday = 6
+  let daysRemaining = numDaysToRemove
+  const newDate = originalDate.clone()
+
+  while (daysRemaining > 0) {
+    newDate.subtract(1, 'days')
+    if (newDate.day() !== Sunday && newDate.day() !== Saturday) {
+      daysRemaining--
+    }
+  }
+
+  return newDate
+}
+
+export const daysToMinutes = (organisation, days) => {
+  const nbHoursByDay = organisation.hours_by_day
+  return Math.floor(days * nbHoursByDay * 60)
+}
+
+export const minutesToDays = (organisation, minutes) => {
+  return minutes / 60 / organisation.hours_by_day
 }

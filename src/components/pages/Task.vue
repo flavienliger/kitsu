@@ -64,6 +64,7 @@
         <div v-if="currentTask">
           <div>
             <add-comment
+              ref="add-comment"
               :is-loading="loading.addComment"
               :is-error="errors.addComment"
               :user="user"
@@ -73,6 +74,7 @@
               :attached-file-name="attachedFileName"
               @add-comment="addComment"
               @add-preview="onAddPreviewClicked"
+              @duplicate-comment="onDuplicateComment"
               @file-drop="selectFile"
               v-if="isCommentingAllowed"
             />
@@ -83,6 +85,7 @@
                 :key="comment.id"
                 :current-user="user"
                 :editable="comment.person && user.id === comment.person.id"
+                :is-first="index === 0"
                 :is-last="index === pinnedCount"
                 @ack-comment="ackComment"
                 @pin-comment="onPinComment"
@@ -167,6 +170,7 @@
                 :preview="currentPreview"
                 :task-type-map="taskTypeMap"
                 :entity-preview-files="taskEntityPreviews"
+                :read-only="isCurrentUserCGArtist"
                 @annotationchanged="onAnnotationChanged"
                 ref="preview-movie"
               />
@@ -192,6 +196,7 @@
 
             <picture-viewer
               :preview="currentPreview"
+              :read-only="isCurrentUserCGArtist"
               @annotation-changed="onAnnotationChanged"
               @add-preview="onAddExtraPreview"
               @remove-extra-preview="showRemoveExtraPreviewModal"
@@ -380,6 +385,7 @@ export default {
       'getTaskPreviews',
       'getTaskComment',
       'isCurrentUserManager',
+      'isCurrentUserCGArtist',
       'isSingleEpisode',
       'isTVShow',
       'personMap',
@@ -1259,6 +1265,10 @@ export default {
       this.modals.addPreview = false
     },
 
+    onDuplicateComment (comment) {
+      this.$refs['add-comment'].setValue(comment)
+    },
+
     onPinComment (comment) {
       this.pinComment(comment)
     },
@@ -1406,6 +1416,7 @@ h2.subtitle {
 
 .page {
   background: #F9F9F9;
+  margin-top: 60px;
   padding: 0;
 }
 
@@ -1414,7 +1425,7 @@ h2.subtitle {
   margin-top: 1em;
   background: white;
   box-shadow: 0px 0px 6px #E0E0E0;
-  margin: 80px 1em 1em 1em;
+  margin: 2em 1em 0 1em;
 }
 
 .navigation-buttons {

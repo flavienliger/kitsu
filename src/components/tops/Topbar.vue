@@ -336,8 +336,11 @@ export default {
         ]
       }
 
-      if (!this.isTVShow) { // Remove episode Section from the list.
+      // Remove episode Section from the list.
+      if (!this.isTVShow && !this.isCurrentUserClient) {
         options.splice(3, 1)
+      } else if (!this.isTVShow) {
+        options.splice(4, 1)
       }
       return options
     }
@@ -347,6 +350,7 @@ export default {
     ...mapActions([
       'clearEpisodes',
       'loadEpisodes',
+      'loadMilestones',
       'loadNotification',
       'logout',
       'setProduction',
@@ -358,6 +362,7 @@ export default {
 
     onLogoutClicked () {
       this.logout((err, success) => {
+        this.$socket.disconnect()
         if (err) console.error(err)
         this.toggleUserMenu()
         if (success) this.$router.push('/login')
@@ -543,14 +548,14 @@ export default {
     },
 
     resetEpisodeForTVShow () {
-      const isNotAssetSection =
-        !this.assetSections.includes(this.currentProjectSection)
+      const isAssetSection =
+        this.assetSections.includes(this.currentProjectSection)
       const isAssetEpisode =
         ['all', 'main'].includes(this.currentEpisodeId)
 
       // Set current episode to first episode if it's not related to assets.
       if (isAssetEpisode) {
-        if (isNotAssetSection) {
+        if (!isAssetSection) {
           this.currentEpisodeId =
             this.episodes.length > 0 ? this.episodes[0].id : null
         }
@@ -578,9 +583,9 @@ export default {
     },
 
     currentProductionId () {
+      this.updateRoute()
       this.resetEpisodeForTVShow()
       if (this.currentProduction.isTVShow) this.loadEpisodes()
-      this.updateRoute()
     },
 
     currentProjectSection () {
@@ -600,6 +605,12 @@ export default {
       } else if (this.currentEpisodeId !== this.currentEpisode.id) {
         this.currentEpisodeId = this.currentEpisode.id
       }
+    },
+
+    currentProduction () {
+      this.$nextTick(() => {
+        this.loadMilestones()
+      })
     }
   },
 
@@ -609,6 +620,7 @@ export default {
         if (this.user.id === eventData.person_id) {
           const notificationId = eventData.notification_id
           this.loadNotification(notificationId)
+            .catch(console.error)
         }
       },
 

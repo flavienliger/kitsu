@@ -13,9 +13,15 @@
       >
       </canvas>
     </div>
-    <img ref="picture" :src="pictureGifPath" v-if="isGif" />
-    <img ref="picture" :src="pictureDlPath" v-else-if="isFullScreen()" />
-    <img ref="picture" :src="picturePath" v-else />
+    <div v-show="!isLoading" ref="picture-subwrapper">
+      <div v-show="isGif">
+        <img ref="picture-gif" :src="pictureGifPath" />
+      </div>
+      <div v-show="!isGif">
+        <img id="picture-big" ref="picture-big" :src="pictureDlPath" v-show="fullScreen" />
+        <img id="picture" ref="picture" :src="picturePath" v-show="!fullScreen" />
+      </div>
+    </div>
     <spinner v-if="isLoading"/>
   </div>
 
@@ -24,14 +30,12 @@
       <button
         class="button flexrow-item"
         @click="onPreviousClicked"
-        v-if="!readOnly"
       >
         <chevron-left-icon class="icon" />
       </button>
 
       <span
         class="flexrow-item bar-element"
-        v-if="!readOnly"
       >
         {{ currentIndex }} / {{ preview.previews.length }}
       </span>
@@ -39,7 +43,6 @@
       <button
         class="button flexrow-item"
         @click="onNextClicked"
-        v-if="!readOnly"
       >
         <chevron-right-icon class="icon" />
       </button>
@@ -47,7 +50,7 @@
       <button
         class="button flexrow-item"
         @click="onAddPreviewClicked"
-        v-if="preview.extension !== 'gif'"
+        v-if="!readOnly && preview.extension !== 'gif'"
       >
         <plus-icon class="icon" />
       </button>
@@ -202,8 +205,8 @@ import {
   TypeIcon,
   XIcon
 } from 'vue-feather-icons'
-import { fullScreenMixin } from '../mixins/fullscreen'
-import { annotationMixin } from '../previews/annotation_mixin'
+import { fullScreenMixin } from '@/components/mixins/fullscreen'
+import { annotationMixin } from '@/components/mixins/annotation_mixin'
 import ButtonSimple from '../widgets/ButtonSimple'
 import ColorPicker from '../widgets/ColorPicker'
 import PencilPicker from '../widgets/PencilPicker'
@@ -246,6 +249,10 @@ export default {
     lastPreviewFiles: {
       type: Array,
       default: () => []
+    },
+    big: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -264,32 +271,42 @@ export default {
       isShowingPalette: false,
       palette: ['#ff3860', '#008732', '#5E60BA', '#f57f17'],
       pencil: 'big',
-      pencilPalette: ['big', 'medium', 'small']
+      pencilPalette: ['big', 'medium', 'small'],
+      picturePath: '',
+      pictureDlPath: '',
+      pictureGifPath: ''
     }
   },
 
   mounted () {
     this.container.style.height = this.getDefaultHeight() + 'px'
-    setTimeout(() => {
-      if (this.picture.complete) {
-        this.isLoading = false
-        this.mountPicture()
-      } else {
-        this.picture.addEventListener('load', () => {
-          this.isLoading = false
-          this.mountPicture()
-        })
-      }
-      window.addEventListener('keydown', this.onKeyDown)
-      window.addEventListener('resize', this.onWindowResize)
-      const events = [
-        'webkitfullscreenchange',
-        'mozfullscreenchange',
-        'fullscreenchange',
-        'msfullscreenchange'
-      ]
-      events.forEach(eventName => window.addEventListener(eventName, this.exitHandler))
-    }, 0)
+    this.isLoading = true
+    if (this.picture.complete) {
+      this.isLoading = false
+      this.onWindowResize()
+    }
+    this.picture.addEventListener('load', () => {
+      this.isLoading = false
+      this.resetPicture()
+    })
+    this.pictureBig.addEventListener('load', () => {
+      this.isLoading = false
+      this.resetPicture()
+    })
+    this.pictureGif.addEventListener('load', () => {
+      this.isLoading = false
+      this.resetPicture()
+    })
+    window.addEventListener('keydown', this.onKeyDown)
+    window.addEventListener('resize', this.onWindowResize)
+    const events = [
+      'webkitfullscreenchange',
+      'mozfullscreenchange',
+      'fullscreenchange',
+      'msfullscreenchange'
+    ]
+    events.forEach(eventName => window.addEventListener(eventName, this.exitHandler))
+    this.setPicturePath()
   },
 
   computed: {
@@ -309,28 +326,25 @@ export default {
       return this.$refs.picture
     },
 
+    pictureBig () {
+      return this.$refs['picture-big']
+    },
+
+    pictureGif () {
+      return this.$refs['picture-gif']
+    },
+
     pictureWrapper () {
       return this.$refs['picture-wrapper']
     },
 
-    picturePath () {
-      const previewId = this.preview.previews[this.currentIndex - 1].id
-      return `/api/pictures/previews/preview-files/${previewId}.png`
+    pictureSubWrapper () {
+      return this.$refs['picture-subwrapper']
     },
 
     pictureOriginalPath () {
       const previewId = this.preview.previews[this.currentIndex - 1].id
       return `/api/pictures/originals/preview-files/${previewId}.png`
-    },
-
-    pictureDlPath () {
-      const previewId = this.preview.previews[this.currentIndex - 1].id
-      return `/api/pictures/originals/preview-files/${previewId}/download`
-    },
-
-    pictureGifPath () {
-      const previewId = this.preview.previews[this.currentIndex - 1].id
-      return `/api/pictures/originals/preview-files/${previewId}.gif`
     },
 
     currentPreview () {
@@ -360,6 +374,8 @@ export default {
 
     mountPicture () {
       this.container.style.height = this.getDefaultHeight() + 'px'
+      this.pictureWrapper.style.height = this.getDefaultHeight() - 32 + 'px'
+      this.pictureSubWrapper.style['max-height'] = this.getDefaultHeight() - 32 + 'px'
       if (!this.fabricCanvas) {
         this.setupFabricCanvas()
       }
@@ -368,65 +384,59 @@ export default {
     },
 
     setupFabricCanvas () {
-      if (!this.readOnly) {
-        const dimensions = this.getDimensions()
-        const width = dimensions.width
-        const height = dimensions.height
-        const fabricCanvas = new fabric.Canvas('annotation-canvas')
+      const dimensions = this.getDimensions()
+      const width = dimensions.width
+      const height = dimensions.height
+      const fabricCanvas = new fabric.Canvas('annotation-canvas')
 
-        this.container.style.height = this.getDefaultHeight() + 'px'
-        fabricCanvas.setDimensions({
-          width: width,
-          height: height
-        })
+      this.container.style.height = this.getDefaultHeight() + 'px'
+      fabricCanvas.setDimensions({
+        width: width,
+        height: height
+      })
 
-        fabricCanvas.freeDrawingBrush.color = this.color
-        fabricCanvas.freeDrawingBrush.width = 4
+      fabricCanvas.freeDrawingBrush.color = this.color
+      fabricCanvas.freeDrawingBrush.width = 4
 
-        fabricCanvas.off('object:added', this.stackAddAction)
-        fabricCanvas.on('object:added', this.stackAddAction)
-        fabricCanvas.off('object:moved', this.saveAnnotations)
-        fabricCanvas.on('object:moved', this.saveAnnotations)
-        fabricCanvas.on('mouse:up', () => {
-          if (this.isDrawing) {
-            this.clearUndoneStack()
-            this.saveAnnotations()
-          }
-        })
+      fabricCanvas.off('object:added', this.stackAddAction)
+      fabricCanvas.on('object:added', this.stackAddAction)
+      fabricCanvas.off('object:moved', this.saveAnnotations)
+      fabricCanvas.on('object:moved', this.saveAnnotations)
+      fabricCanvas.on('mouse:up', () => {
+        if (this.isDrawing) {
+          this.clearUndoneStack()
+          this.saveAnnotations()
+        }
+      })
 
-        this.fabricCanvas = fabricCanvas
-      }
-    },
-
-    clearCanvas () {
-      if (this.fabricCanvas) {
-        this.fabricCanvas.getObjects().forEach((obj) => {
-          this.fabricCanvas.remove(obj)
-        })
-      }
+      this.fabricCanvas = fabricCanvas
     },
 
     getDefaultHeight () {
-      if (this.isFullScreen()) {
+      if (this.fullScreen) {
         return screen.height
       } else {
-        return screen.width > 1300 && (!this.light || this.readOnly) ? 500 : 200
+        return screen.width > 1300 && (!this.light || this.big) ? 500 : 200
       }
     },
 
     getDimensions () {
       let ratio = 1
-      if (this.picture.naturalWidth) {
+      if (!this.fullScreen && this.picture.naturalWidth && !this.isGif) {
         ratio = this.picture.naturalHeight / this.picture.naturalWidth
+      } else if (
+        this.fullScreen && this.pictureBig.naturalWidth && !this.isGif
+      ) {
+        ratio = this.pictureBig.naturalHeight / this.pictureBig.naturalWidth
+      } else if (this.pictureGif.naturalWidth && this.isGif) {
+        ratio = this.pictureGif.naturalHeight / this.pictureGif.naturalWidth
       }
       let width = this.container.offsetWidth - 1
       let height = Math.floor(width * ratio)
-      if (height > this.getDefaultHeight()) {
-        height = this.getDefaultHeight()
+      if (height > this.getDefaultHeight() - 32) {
+        height = this.getDefaultHeight() - 32
       }
-      height = height - 32
       width = Math.floor(height / ratio)
-
       return { width, height }
     },
 
@@ -535,17 +545,24 @@ export default {
       }
     },
 
+    resetPicture () {
+      this.mountPicture()
+      this.reloadAnnotations()
+      this.resetUndoStacks()
+      this.fixCanvasSize()
+    },
+
     onWindowResize () {
       const now = (new Date().getTime())
       this.lastCall = this.lastCall || 0
       if (now - this.lastCall > 600) {
         this.lastCall = now
-        setTimeout(() => {
-          this.clearCanvas()
+        this.clearCanvas()
+        this.$nextTick(() => {
           this.mountPicture()
           this.reloadAnnotations()
           this.$nextTick(this.fixCanvasSize)
-        }, 10)
+        })
       }
     },
 
@@ -569,7 +586,7 @@ export default {
       let annotation = { ...this.getAnnotation(0) }
 
       this.fabricCanvas.getObjects().forEach((obj) => {
-        if (obj.type === 'path') {
+        if (obj.type === 'path' || obj.type === 'text' || obj.type === 'i-text') {
           if (!obj.canvasWidth) obj.canvasWidth = this.fabricCanvas.width
           obj.setControlsVisibility({
             mt: false,
@@ -599,11 +616,17 @@ export default {
         }
       }
       this.annotations = []
-      this.annotations.push(annotation)
+      this.annotations = [annotation]
 
+      const annotations = [{ ...annotation }]
+      const preview = {
+        id: this.currentPreview.id,
+        task_id: this.currentPreview.task_id,
+        annotations: annotations
+      }
       this.$emit('annotation-changed', {
-        preview: this.currentPreview,
-        annotations: [...this.annotations]
+        preview: preview,
+        annotations: annotations
       })
     },
 
@@ -611,19 +634,9 @@ export default {
       return [...this.annotations][time]
     },
 
-    clearAnnotations () {
-      if (this.fabricCanvas) {
-        this.fabricCanvas.getObjects().forEach((obj) => {
-          if (['rect', 'circle', 'path'].includes(obj.type)) {
-            this.fabricCanvas.remove(obj)
-          }
-        })
-      }
-    },
-
     loadAnnotation (time) {
       const annotation = this.getAnnotation(time)
-      this.clearAnnotations()
+      this.clearCanvas()
 
       if (annotation) {
         const dimensions = this.getDimensions()
@@ -637,7 +650,9 @@ export default {
         if (annotation.height) {
           scaleMultiplierY = dimensions.height / annotation.height
         }
-
+        if (!annotation.drawing.objects) {
+          annotation.drawing.objects = []
+        }
         annotation.drawing.objects.forEach((obj) => {
           const base = {
             left: obj.left * scaleMultiplierX,
@@ -686,7 +701,9 @@ export default {
                 left: obj.left * scaleMultiplierX,
                 top: obj.top * scaleMultiplierY,
                 fontFamily: obj.fontFamily,
-                fontSize: obj.fontSize
+                fontSize: obj.fontSize,
+                backgroundColor: 'white',
+                padding: 50
               }
             )
             text.setControlsVisibility({
@@ -704,15 +721,6 @@ export default {
           }
         })
       }
-    },
-
-    reloadAnnotations () {
-      if (this.currentPreview.annotations) {
-        this.annotations = this.currentPreview.annotations
-      } else {
-        this.annotations = []
-      }
-      return this.annotations
     },
 
     onPreviousClicked () {
@@ -734,8 +742,6 @@ export default {
     displayFirst () {
       if (this.currentIndex > 1) {
         this.currentIndex = 1
-      } else {
-        this.reset()
       }
     },
 
@@ -744,10 +750,10 @@ export default {
     },
 
     reset () {
-      this.clearAnnotations()
+      this.mountPicture()
+      this.clearCanvas()
       this.annotations = []
       this.reloadAnnotations()
-      this.mountPicture()
       this.isDrawing = false
       if (this.fabricCanvas) this.fabricCanvas.isDrawingMode = false
     },
@@ -756,13 +762,26 @@ export default {
       const dimensions = this.getDimensions()
       const width = dimensions.width
       const height = dimensions.height
+      this.picture.style.width = width + 'px'
+      this.picture.style.height = height + 'px'
+      this.pictureBig.style.width = width + 'px'
+      this.pictureBig.style.height = height + 'px'
+      this.pictureGif.style.width = width + 'px'
+      this.pictureGif.style.height = height + 'px'
       this.picture.width = width
       this.picture.height = height
+      this.pictureBig.width = width
+      this.pictureBig.height = height
+      this.pictureGif.width = width
+      this.pictureGif.height = height
+
       if (this.fabricCanvas) {
         this.fabricCanvas.setDimensions({ width, height })
         const containerWidth = this.container.offsetWidth
         const margin = Math.round((containerWidth - width) / 2)
-        this.$refs['canvas-wrapper'].style.left = margin + 'px'
+        this.canvasWrapper.style.left = margin + 'px'
+        this.canvasWrapper.style.width = width + 'px'
+        this.canvasWrapper.style.height = height + 'px'
         setTimeout(() => {
           this.fabricCanvas.calcOffset()
         }, 10)
@@ -771,26 +790,75 @@ export default {
 
     changeCurrentPreview (previewFile) {
       this.$emit('change-current-preview', previewFile)
+    },
+
+    setPicturePath () {
+      if (this.isGif) {
+        const previewId = this.preview.previews[this.currentIndex - 1].id
+        this.pictureGifPath = `/api/pictures/originals/preview-files/${previewId}.gif`
+      } else {
+        const previewId = this.preview.previews[this.currentIndex - 1].id
+        this.picturePath = `/api/pictures/previews/preview-files/${previewId}.png`
+      }
+      this.setPictureDlPath()
+    },
+
+    setPictureDlPath () {
+      const previewId = this.preview.previews[this.currentIndex - 1].id
+      this.pictureDlPath = `/api/pictures/originals/preview-files/${previewId}/download`
     }
   },
 
   watch: {
     preview () {
+      this.isLoading = true
+      this.setPicturePath()
+      this.setPictureDlPath()
       if (this.currentIndex > 1) {
         this.currentIndex = 1
-      } else {
-        this.reset()
       }
-      this.resetUndoStacks()
+      if (this.fullScreen) {
+        if (this.pictureBig.complete) {
+          this.resetPicture()
+          this.isLoading = false
+        }
+      } else {
+        if (this.picture.complete) {
+          this.resetPicture()
+          this.isLoading = false
+        }
+      }
     },
 
     currentIndex () {
-      this.reset()
-      this.resetUndoStacks()
+      this.isLoading = true
+      if (this.fullScreen) {
+        this.setPictureDlPath()
+        if (this.pictureBig.complete) {
+          this.resetPicture()
+        }
+      } else {
+        this.setPicturePath()
+        if (this.picture.complete) {
+          this.resetPicture()
+        }
+      }
     },
 
     light () {
       this.onWindowResize()
+    },
+
+    fullScreen () {
+      if (this.fullScreen) {
+        this.isLoading = true
+        this.setPictureDlPath()
+        if (this.pictureBig.complete) this.isLoading = false
+      } else {
+        this.fabricCanvas.isDrawingMode = false
+        this.isDrawing = false
+        this.setPicturePath()
+      }
     }
   }
 }
@@ -947,5 +1015,4 @@ export default {
   transition: 0.3s background ease;
   color: white;
 }
-
 </style>

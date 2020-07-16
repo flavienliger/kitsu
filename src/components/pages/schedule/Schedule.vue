@@ -121,9 +121,20 @@
               <span class="filler flexrow-item">
                 {{ childElement.name }}
               </span>
+              <span class="flexrow-item"
+                v-if="childElement.editable"
+              >
+                <input
+                  class="man-days-unit flexrow-item"
+                  placeholder="0"
+                  @input="onChildEstimationChanged($event, childElement, rootElement)"
+                  v-model="childElement.man_days"
+                />
+                {{ $t('schedule.md') }}
+              </span>
               <span
                 class="man-days-unit flexrow-item"
-                v-if="childElement.man_days"
+                v-else
               >
                 {{ childElement.man_days }}
                 {{ $t('schedule.md') }}
@@ -153,16 +164,12 @@
             v-if="milestones[day.text]"
           >
             <div
-              class="milestone-tooltip flexrow"
+              class="milestone-tooltip"
               :style="milestoneTooltipStyle"
             >
-              <span class="bull flexrow-item">&bull;</span>
-              <span class="flexrow-item">
+              <span>
                 {{ milestones[day.text].name }}
               </span>
-              <span class="filler">
-              </span>
-              <edit2-icon class="edit-icon flexrow-item" />
             </div>
             <div>
               <span class="bull">&bull;</span>
@@ -188,7 +195,7 @@
             <div class="date-name">
               <span
                 class="month-name"
-                v-if="day.newMonth || index === 0"
+                v-if="day.newMonth"
               >
                 {{ day.monthText }}
               </span>
@@ -301,7 +308,7 @@
                 >
                   <div
                     :class="{
-                      'timebar-left-hand': childElement.editable
+                      'timebar-left-hand': childElement.editable && !childElement.unresizable
                     }"
                     @mousedown="moveTimebarLeftSide(childElement, $event)"
                   >
@@ -313,7 +320,7 @@
                   </div>
                   <div
                     :class="{
-                      'timebar-right-hand': childElement.editable
+                      'timebar-right-hand': childElement.editable && !childElement.unresizable
                     }"
                     @mousedown="moveTimebarRightSide(childElement, $event)"
                   >
@@ -349,8 +356,9 @@ import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment-timezone'
 
 import colors from '../../../lib/colors'
+import { addBusinessDays } from '../../../lib/time'
 
-import { ChevronRightIcon, ChevronDownIcon, Edit2Icon } from 'vue-feather-icons'
+import { ChevronRightIcon, ChevronDownIcon } from 'vue-feather-icons'
 import EditMilestoneModal from '../../modals/EditMilestoneModal'
 import PeopleAvatar from '../../widgets/PeopleAvatar'
 import ProductionName from '../../widgets/ProductionName'
@@ -361,7 +369,6 @@ export default {
   components: {
     ChevronDownIcon,
     ChevronRightIcon,
-    Edit2Icon,
     EditMilestoneModal,
     PeopleAvatar,
     ProductionName,
@@ -446,7 +453,12 @@ export default {
 
     daysAvailable () {
       const days = []
-      const day = this.startDate.clone().add(-1, 'days')
+      const startDate = moment.tz(
+        this.startDate.format('YYYY-MM-DD'),
+        'YYYY-MM-DD',
+        'UTC'
+      )
+      const day = startDate.clone().add(-1, 'days')
       let dayDate = day.toDate()
       const endDayDate = this.endDate.toDate()
       dayDate.isoweekday = day.isoWeekday()
@@ -462,14 +474,13 @@ export default {
           nextDay.newWeek = true
         }
         nextDay.monthday = dayDate.monthday + 1
-        if (nextDay.monthday > 27 &&
-            nextDay.getMonth() !== dayDate.getMonth()) {
+        if (nextDay.getMonth() !== dayDate.getMonth()) {
           nextDay.newMonth = true
           nextDay.monthday = 1
         }
         if ([6, 7].includes(nextDay.isoweekday)) nextDay.weekend = true
 
-        const momentDay = moment(nextDay)
+        const momentDay = moment.tz(nextDay, 'YYYY-MM-DD', 'UTC')
         momentDay.newWeek = nextDay.newWeek
         momentDay.newMonth = nextDay.newMonth
         momentDay.weekend = nextDay.weekend
@@ -480,6 +491,20 @@ export default {
         days.push(momentDay)
         dayDate = nextDay
       }
+
+      if (days.length > 1 && days[0].weekend === true) {
+        days[0].newMonth = false
+        days[1].newMonth = true
+        if (days.length > 2 && days[1].weekend === true) {
+          days[1].newMonth = false
+          days[2].newMonth = true
+        } else if (days.length > 2) {
+          days[1].newMonth = true
+        }
+      } else if (days.length > 0) {
+        days[0].newMonth = true
+      }
+
       return days
     },
 
@@ -599,6 +624,30 @@ export default {
       }
 
       this.updatePositionBarPosition(event)
+    },
+
+    onChildEstimationChanged (event, childElement, rootElement) {
+      const estimation = parseInt(event.target.value)
+      childElement.man_days = estimation
+      rootElement.man_days = rootElement.children.reduce((acc, child) => {
+        let value = acc
+        let manDays = child.man_days
+        if (child.man_days) {
+          if (typeof manDays === 'string') manDays = parseInt(manDays)
+          value = acc + manDays
+        }
+        return value
+      }, 0)
+
+      if (estimation > 0) {
+        childElement.endDate = addBusinessDays(
+          childElement.startDate, estimation
+        )
+      }
+      this.$emit('estimation-changed', {
+        taskId: childElement.id,
+        days: estimation
+      })
     },
 
     updatePositionBarPosition (event) {
@@ -1003,8 +1052,13 @@ export default {
     },
 
     milestoneLineStyle (milestone) {
-      const endDate = moment(milestone.date, 'YYYY-MM-DD', 'en')
-      const lengthDiff = this.businessDiff(this.startDate, endDate)
+      const startDate = moment(
+        this.startDate.format('YYYY-MM-DD'),
+        'YYYY-MM-DD',
+        'UTC'
+      )
+      const endDate = moment(milestone.date, 'YYYY-MM-DD', 'UTC')
+      const lengthDiff = this.businessDiff(startDate, endDate)
       return {
         left: (lengthDiff + 0.5) * this.cellWidth + 'px'
       }
@@ -1108,6 +1162,12 @@ export default {
   .total-man-days {
     background: #36393F;
     color: white;
+  }
+
+  .entity-name {
+    .man-days-unit {
+      color: $white;
+    }
   }
 
   .child-name .entity-name span {
@@ -1399,6 +1459,7 @@ export default {
   }
 
   .man-days-unit {
+    color: $dark-grey;
     font-size: 0.7em;
   }
 
@@ -1472,19 +1533,10 @@ export default {
     position: relative;
     border: 1px solid #eeeeee;
     width: 140px;
+    text-align: center;
     top: -5px;
     background: white;
     z-index: 100;
-
-    .bull {
-      font-size: 10px;
-    }
-
-    .edit-icon {
-      width: 10px;
-      height: 10px;
-      color: #AAA;
-    }
   }
 
   &:hover {

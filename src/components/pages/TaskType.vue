@@ -1,5 +1,4 @@
 <template>
-
 <div class="task-type columns fixed-page">
   <div class="column main-column">
     <div class="task-type page" ref="page">
@@ -7,15 +6,7 @@
         <div class="flexcolumn-item flexrow">
           <router-link
             class="back-link flexrow-item"
-            :to="shotsPath"
-            v-if="currentTaskType.for_shots"
-          >
-            <chevron-left-icon />
-          </router-link>
-          <router-link
-            class="back-link flexrow-item"
-            :to="assetsPath"
-            v-else
+            :to="backPath"
           >
             <chevron-left-icon />
           </router-link>
@@ -44,6 +35,11 @@
             <li :class="{'is-active': isActiveTab('schedule')}">
               <router-link :to="schedulePath">
                 {{ $t('schedule.title')}}
+              </router-link>
+            </li>
+            <li :class="{'is-active': isActiveTab('estimation')}">
+              <router-link :to="estimationPath">
+                {{ $t('estimation.title')}}
               </router-link>
             </li>
           </ul>
@@ -133,8 +129,22 @@
           :is-loading="loading.entities"
           @item-changed="saveScheduleItem"
           @root-element-expanded="expandPersonElement"
+          @estimation-changed="updateEstimation"
         />
       </div>
+
+      <div
+        class="task-type-estimation flexrow-item"
+        v-if="isActiveTab('estimation')"
+      >
+        <estimation-helper
+          ref="estimation-widget"
+          :is-assets="isAssets"
+          :tasks="tasks"
+          @estimation-changed="updateEstimation"
+        />
+      </div>
+
     </div>
   </div>
 
@@ -156,9 +166,14 @@ import moment from 'moment'
 import { searchMixin } from '../mixins/search'
 
 import csv from '../../lib/csv'
-import { sortPeople } from '../../lib/sorting'
 import { buildSupervisorTaskIndex, indexSearch } from '../../lib/indexing'
+import { sortPeople } from '../../lib/sorting'
 import { slugify } from '../../lib/string'
+import {
+  daysToMinutes,
+  getDatesFromStartDate,
+  minutesToDays
+} from '../../lib/time'
 import {
   applyFilters,
   getDescFilters,
@@ -173,10 +188,11 @@ import { ChevronLeftIcon } from 'vue-feather-icons'
 import ButtonSimple from '../widgets/ButtonSimple'
 import Combobox from '../widgets/Combobox'
 import ComboboxNumber from '../widgets/ComboboxNumber'
-import TaskInfo from '../sides/TaskInfo'
+import EstimationHelper from './tasktype/EstimationHelper'
 import Schedule from './schedule/Schedule'
 import SearchField from '../widgets/SearchField'
 import SearchQueryList from '../widgets/SearchQueryList'
+import TaskInfo from '../sides/TaskInfo'
 import TaskList from '../lists/TaskList'
 import TaskTypeName from '../widgets/TaskTypeName'
 
@@ -188,6 +204,7 @@ export default {
     ChevronLeftIcon,
     Combobox,
     ComboboxNumber,
+    EstimationHelper,
     Schedule,
     SearchField,
     SearchQueryList,
@@ -245,9 +262,7 @@ export default {
 
   mounted () {
     this.isAssets = this.$route.path.includes('assets')
-    if (this.$route.path.includes('schedule')) {
-      this.activeTab = 'schedule'
-    }
+    this.updateActiveTab()
     setTimeout(() => {
       this.initData(false)
     }, 100)
@@ -268,6 +283,7 @@ export default {
       'isCurrentUserManager',
       'isTVShow',
       'nbSelectedTasks',
+      'organisation',
       'personMap',
       'selectedTasks',
       'sequenceSubscriptions',
@@ -306,12 +322,33 @@ export default {
 
     // Paths
 
+    backPath () {
+      if (this.isActiveTab('schedule')) {
+        return {
+          name: 'schedule',
+          params: {
+            production_id: this.currentProduction.id
+          }
+        }
+      } else {
+        if (this.currentTaskType.for_shots) {
+          return this.shotsPath
+        } else {
+          return this.assetsPath
+        }
+      }
+    },
+
     tasksPath () {
       return this.getRoute('task-type')
     },
 
     schedulePath () {
       return this.getRoute('task-type-schedule')
+    },
+
+    estimationPath () {
+      return this.getRoute('task-type-estimation')
     },
 
     // Helpers
@@ -402,6 +439,8 @@ export default {
     updateActiveTab () {
       if (this.$route.path.indexOf('schedule') > 0) {
         this.activeTab = 'schedule'
+      } else if (this.$route.path.indexOf('estimation') > 0) {
+        this.activeTab = 'estimation'
       } else {
         this.activeTab = 'tasks'
       }
@@ -557,6 +596,24 @@ export default {
       csv.buildCsvFile(name, taskLines)
     },
 
+    updateEstimation ({ taskId, days }) {
+      const estimation = daysToMinutes(this.organisation, parseInt(days))
+      const task = this.taskMap[taskId]
+      let data = { estimation }
+      if (task.start_date) {
+        const startDate = moment(task.start_date)
+        const dueDate = task.due_date ? moment(task.due_date) : null
+        data = getDatesFromStartDate(
+          startDate,
+          dueDate,
+          minutesToDays(this.organisation, estimation)
+        )
+        data.estimation = estimation
+      }
+      this.updateTask({ taskId, data })
+        .catch(console.error)
+    },
+
     // Schedule
 
     resetScheduleItems () {
@@ -707,6 +764,7 @@ export default {
           loading: false,
           man_days: estimation,
           editable: this.isCurrentUserManager,
+          unresizable: estimation > 0,
           parentElement: personElement,
           color: this.getTaskElementColor(task, endDate),
           children: []
@@ -723,7 +781,9 @@ export default {
 
     getTaskElementColor (task, endDate) {
       if (this.schedule.currentColor === 'status') {
-        return this.taskStatusMap[task.task_status_id].color
+        let color = this.taskStatusMap[task.task_status_id].color
+        if (color === '#f5f5f5') color = '#999'
+        return color
       } else if (this.schedule.currentColor === 'late') {
         const isLate = (
           !this.taskStatusMap[task.task_status_id].is_done &&
@@ -883,6 +943,7 @@ export default {
 .task-type {
   display: flex;
   flex-direction: column;
+  max-height: 100%;
 }
 
 .columns {
@@ -898,7 +959,6 @@ export default {
 .main-column {
   border-right: 3px solid $light-grey;
   overflow: hidden;
-  display: flex;
 }
 
 .sorting-combobox {
@@ -911,6 +971,7 @@ export default {
 
 .query-list {
   margin-bottom: 0;
+  margin-top: 0.2em;
   margin-left: 1em;
   min-height: 25px;
 }
@@ -926,5 +987,10 @@ export default {
 
 .zoom-level {
   margin-top: -8px;
+}
+
+.task-type-estimation {
+  display: flex;
+  max-height: calc(100% - 200px);
 }
 </style>

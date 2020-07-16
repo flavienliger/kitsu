@@ -3,7 +3,7 @@
   'modal': true,
   'is-active': active
 }">
-  <div class="modal-background"></div>
+  <div @click="$emit('cancel')" class="modal-background"></div>
 
   <div class="modal-content">
     <div class="box content">
@@ -61,6 +61,7 @@
           <combobox
             class="flexrow-item"
             :options="descriptorOptions"
+            @input="onDescriptorChanged(descriptorFilter)"
             v-model="descriptorFilter.id"
           />
           <combobox
@@ -293,10 +294,11 @@ export default {
 
     applyTaskTypeChoice (query) {
       this.taskTypeFilters.values.forEach((taskTypeFilter) => {
-        const operator = taskTypeFilter.operator
+        let operator = '=['
+        if (taskTypeFilter.operator === '=-') operator = '=[-'
         const taskType = this.getTaskType(taskTypeFilter.id)
         const taskStatus = this.taskStatusMap[taskTypeFilter.statusId]
-        query += ` [${taskType.name}]${operator}${taskStatus.short_name}`
+        query += ` [${taskType.name}]${operator}${taskStatus.short_name}]`
       })
       return query
     },
@@ -316,8 +318,7 @@ export default {
           let value = this.assignation.person.name
           if (this.assignation.value === '-assignedto') value = `-${value}`
           query += ` assignedto=[${value}]`
-        }
-        if (this.assignation.taskTypeId) {
+        } else if (this.assignation.taskTypeId) {
           const taskType = this.taskTypeMap[this.assignation.taskTypeId]
           const value =
             this.assignation.value === 'assigned' ? 'assigned' : 'unassigned'
@@ -356,6 +357,15 @@ export default {
     },
 
     // Descriptors
+
+    onDescriptorChanged (descriptorFilter) {
+      const descriptor = this.getDescriptor(descriptorFilter.id)
+      if (descriptor.choices.length > 0) {
+        descriptorFilter.text = descriptor.choices[0]
+      } else {
+        descriptorFilter.text = ''
+      }
+    },
 
     addDescriptorFilter () {
       const desc = this.getDescriptor(this.descriptorOptions[0].value)

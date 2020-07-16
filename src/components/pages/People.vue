@@ -3,30 +3,28 @@
     <div class="flexrow page-header">
       <page-title class="flexrow-item filler" :text="$t('people.title')" />
 
-      <div class="flexrow-item">
-        <button-simple
-          class="flexrow-item"
-          :title="$t('main.csv.import_file')"
-          :is-responsive="true"
-          icon="upload"
-          @click="showImportModal"
-          v-if="isCurrentUserAdmin"
-        />
-        <button-href-link
-          class="flexrow-item"
-          :title="$t('main.csv.export_file')"
-          icon="download"
-          path="/api/export/csv/persons.csv"
-        />
-        <button-link
-          class="flexrow-item"
-          :text="$t('people.new_person')"
-          :is-responsive="true"
-          icon="plus"
-          path="/people/new"
-          v-if="isCurrentUserAdmin"
-        />
-      </div>
+      <button-simple
+        class="flexrow-item"
+        :title="$t('main.csv.import_file')"
+        :is-responsive="true"
+        icon="upload"
+        @click="showImportModal"
+        v-if="isCurrentUserAdmin"
+      />
+      <button-href-link
+        class="flexrow-item"
+        :title="$t('main.csv.export_file')"
+        icon="download"
+        path="/api/export/csv/persons.csv"
+      />
+      <button-link
+        class="flexrow-item"
+        :text="$t('people.new_person')"
+        :is-responsive="true"
+        icon="plus"
+        path="/people/new"
+        v-if="isCurrentUserAdmin"
+      />
     </div>
 
     <div class="flexrow">
@@ -232,18 +230,6 @@ export default {
       'uploadPersonFile'
     ]),
 
-    cleanUpCsv (data) {
-      data.forEach(item => {
-        item.forEach((item, index, data) => {
-          data[index] = item.trim()
-        })
-      })
-      data[0].forEach((item, index, data) => {
-        data[index] = item[0].toUpperCase() + item.slice(1)
-      })
-      return data
-    },
-
     renderImport (data, mode) {
       this.loading.importing = true
       this.errors.importing = false
@@ -253,7 +239,6 @@ export default {
       }
       csv.processCSV(data)
         .then((results) => {
-          this.cleanUpCsv(results)
           this.parsedCSV = results
           this.hideImportModal()
           this.loading.importing = false

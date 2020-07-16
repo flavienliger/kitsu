@@ -38,7 +38,7 @@
           </div>
         </template>
         <textarea
-          ref="commentTextarea"
+          ref="comment-textarea"
           class="textarea flexrow-item"
           :placeholder="$t('comments.add_comment')"
           :disabled="isLoading"
@@ -89,7 +89,6 @@
           icon="list"
           :title="$t('comments.add_checklist')"
           @click="addChecklistEntry(-1)"
-          v-if="isAddChecklistAllowed"
         >
         </button-simple>
         <button-simple
@@ -265,7 +264,7 @@ export default {
     },
 
     focus () {
-      this.$refs.commentTextarea.focus()
+      this.$refs['comment-textarea'].focus()
     },
 
     onDragover () {
@@ -311,6 +310,13 @@ export default {
 
     removeTask (entry) {
       this.checklist = remove(this.checklist, entry)
+    },
+
+    setValue (comment) {
+      this.checklist = comment.checklist
+      this.$nextTick(() => {
+        this.$refs['comment-textarea'].value = comment.text
+      })
     }
   },
 
@@ -375,7 +381,7 @@ export default {
 }
 
 .button.active {
-  background: rgba($green, .5);
+  background: var(--background-selected);
 }
 
 .status-selector {

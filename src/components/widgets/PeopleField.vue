@@ -6,7 +6,8 @@
     :min-len="1"
     :auto-select-one-item="false"
     :input-attrs="{
-      placeholder: this.$t('people.select_person')
+      placeholder: this.$t('people.select_person'),
+      class: big ? 'big v-autocomplete-input' : 'v-autocomplete-input'
     }"
     ref="autocomplete"
     @update-items="update"
@@ -62,6 +63,10 @@ export default {
     people: {
       type: Array,
       default: () => []
+    },
+    big: {
+      type: Boolean,
+      default: false
     }
   },
 
@@ -148,7 +153,7 @@ export default {
   max-height: 300px;
   overflow-y: auto;
   box-shadow: 2px 2px 2px 0px $light-grey;
-  z-index: 100;
+  z-index: 3000;
 }
 
 .v-autocomplete .v-autocomplete-list-item {
@@ -162,7 +167,7 @@ export default {
 .v-autocomplete .v-autocomplete-input-group .v-autocomplete-input {
   width: 300px;
   margin-bottom: 1px;
-  border: 1px solid $light-grey;
+  border: 1px solid $light-grey-light;
   border-radius: 5px;
   padding: 0.5em;
 
@@ -175,6 +180,10 @@ export default {
 
   &:hover {
     border: 1px solid $green;
+  }
+
+  &.big {
+    padding: 0.85em;
   }
 }
 </style>

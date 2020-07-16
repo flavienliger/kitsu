@@ -64,7 +64,7 @@
               'flexrow-item': true,
               selected: currentPreviewIndex === index
             }"
-            :key="'preview-' + preview.revision"
+            :key="'preview-' + preview.id"
             @click="onPreviewChanged(index)"
             v-for="(preview, index) in lastFivePreviews"
           >
@@ -94,6 +94,7 @@
                   :last-preview-files="lastFiveMoviePreviews"
                   :task-type-map="taskTypeMap"
                   :light="!isWide"
+                  :read-only="isCurrentUserCGArtist"
                   @annotationchanged="onAnnotationChanged"
                   @change-current-preview="changeCurrentPreview"
                   ref="preview-movie"
@@ -128,6 +129,7 @@
                 :preview="currentPreview"
                 :last-preview-files="lastFivePicturePreviews"
                 :light="!isWide"
+                :read-only="isCurrentUserCGArtist"
                 @annotation-changed="onAnnotationChanged"
                 @add-preview="onAddExtraPreview"
                 @remove-extra-preview="onRemoveExtraPreview"
@@ -168,15 +170,17 @@
 
             <div
               class="comments"
-              v-if="taskComments.length > 0 && !loading.task"
+              v-if="taskComments && taskComments.length > 0 && !loading.task"
             >
               <comment
                 :key="'comment' + comment.id"
                 :comment="comment"
                 :light="true"
                 :add-preview="onAddPreviewClicked"
+                :is-first="index === 0"
                 :is-last="index === pinnedCount"
                 :editable="comment.person && user.id === comment.person.id"
+                @duplicate-comment="onDuplicateComment"
                 @pin-comment="onPinComment"
                 @edit-comment="onEditComment"
                 @delete-comment="onDeleteComment"
@@ -381,6 +385,7 @@ export default {
       'getTaskComment',
       'getTaskComments',
       'getTaskPreviews',
+      'isCurrentUserCGArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'isSingleEpisode',
@@ -826,6 +831,10 @@ export default {
       this.ackComment(comment)
     },
 
+    onDuplicateComment (comment) {
+      this.$refs['add-comment'].setValue(comment)
+    },
+
     onPinComment (comment) {
       this.pinComment(comment)
     },
@@ -981,7 +990,7 @@ export default {
               }
             } else if (this.$refs['preview-picture']) {
               if (!this.$refs['preview-picture'].isDrawing) {
-                this.$refs['preview-picture'].reset()
+                this.$refs['preview-picture'].reloadAnnotations()
               }
             }
           })
@@ -1026,18 +1035,11 @@ export default {
   .task-info {
     color: white;
   }
-
-  .preview-list span {
-    &:hover,
-    &.selected {
-      color: $dark-grey;
-    }
-  }
 }
 
 .side {
   background: #F8F8F8;
-  height: 100%;
+  min-height: 100%;
 }
 
 .add-comment {
@@ -1139,11 +1141,11 @@ export default {
     border-radius: 3px;
 
     &:hover {
-      background: $light-green-light;
+      background: var(--background-selectable);
     }
 
     &.selected {
-      background: $purple;
+      background: var(--background-selected);
     }
   }
 }

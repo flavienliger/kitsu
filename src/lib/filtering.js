@@ -1,4 +1,5 @@
 import {
+  buildTaskTypeIndex,
   buildNameIndex,
   indexSearch
 } from './indexing'
@@ -162,6 +163,14 @@ export const getTaskFilters = (entryIndex, query) => {
   return filters
 }
 
+const cleanParenthesis = (value) => {
+  if (value[0] === '[') {
+    return value.substring(1, value.length - 1)
+  } else {
+    return value
+  }
+}
+
 /*
  * Extract task type filters (like anim=wip or [mode facial]=wip) from given
  * query.
@@ -177,7 +186,7 @@ export const getTaskTypeFilters = (
   const rgxMatches = queryText.match(EQUAL_REGEX)
 
   if (rgxMatches) {
-    const taskTypeNameIndex = buildNameIndex(taskTypes, false)
+    const taskTypeNameIndex = buildTaskTypeIndex(taskTypes)
     const taskStatusShortNameIndex = {}
     taskStatuses.forEach((taskStatus) => {
       const shortName = taskStatus.short_name.toLowerCase()
@@ -185,13 +194,10 @@ export const getTaskTypeFilters = (
     })
     rgxMatches.forEach((rgxMatch) => {
       const pattern = rgxMatch.split('=')
-      let value = pattern[1]
+      let value = cleanParenthesis(pattern[1])
       const excluding = value.startsWith('-')
       if (excluding) value = value.substring(1)
-      let taskTypeName = pattern[0]
-      if (taskTypeName[0] === '[') {
-        taskTypeName = taskTypeName.substring(1, taskTypeName.length - 1)
-      }
+      const taskTypeName = cleanParenthesis(pattern[0])
       const taskTypes = taskTypeNameIndex[taskTypeName.toLowerCase()]
       if (taskTypes) {
         if (value === 'unassigned') {

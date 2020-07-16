@@ -376,7 +376,7 @@ const actions = {
           comment: comment || ''
         })
           .then(next)
-          .catch((err) => next(err))
+          .catch(next)
       } else {
         next()
       }
@@ -394,12 +394,12 @@ const actions = {
       const taskType = rootGetters.taskTypeMap[task.task_type_id]
 
       if (task && task.priority !== priority) {
-        tasksApi.updateTask(taskId, { priority }, (err, task) => {
-          if (!err) {
+        tasksApi.updateTask(taskId, { priority })
+          .then(task => {
             commit(EDIT_TASK_END, { task, taskType })
-          }
-          next(err)
-        })
+            next()
+          })
+          .catch(next)
       } else {
         next()
       }
@@ -409,29 +409,11 @@ const actions = {
   },
 
   updateTask ({ commit }, { taskId, data }) {
-    return tasksApi.updateTask(taskId, data, () => {
-      commit(EDIT_TASK_DATES, { taskId, data })
-    })
-  },
-
-  changeSelectedEstimations ({ commit, state, rootGetters }, estimation) {
-    return new Promise((resolve, reject) => {
-      async.eachSeries(Object.keys(state.selectedTasks), (taskId, next) => {
-        const task = state.taskMap[taskId]
-        const taskType = rootGetters.taskTypeMap[task.task_type_id]
-        if (task && task.estimation !== estimation) {
-          tasksApi.updateTask(taskId, { estimation }, (err, task) => {
-            if (!err) commit(EDIT_TASK_END, { task, taskType })
-            next(err)
-          })
-        } else {
-          next()
-        }
-      }, (err) => {
-        if (err) reject(err)
-        else resolve()
+    commit(EDIT_TASK_DATES, { taskId, data })
+    return tasksApi.updateTask(taskId, data)
+      .then((task) => {
+        commit(EDIT_TASK_DATES, { taskId, data })
       })
-    })
   },
 
   getTask ({ commit, rootGetters }, { taskId, callback }) {
@@ -569,21 +551,16 @@ const actions = {
   updatePreviewAnnotation ({ commit, state }, {
     taskId, preview, annotations
   }) {
-    return new Promise((resolve, reject) => {
-      tasksApi.updatePreviewAnnotation(preview, annotations)
-        .then((updatedPreview) => {
-          commit(UPDATE_PREVIEW_ANNOTATION, {
-            taskId,
-            preview,
-            annotations
-          })
-          resolve()
+    return tasksApi.updatePreviewAnnotation(preview, annotations)
+      .then((updatedPreview) => {
+        commit(UPDATE_PREVIEW_ANNOTATION, {
+          taskId,
+          preview,
+          annotations
         })
-        .catch((err) => {
-          console.error(err)
-          reject(err)
-        })
-    })
+        Promise.resolve()
+      })
+      .catch(console.error)
   },
 
   refreshPreview ({ commit, state }, { taskId, previewId }) {

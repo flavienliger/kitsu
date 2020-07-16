@@ -4,7 +4,7 @@
   ref="container"
   :class="{
     dark: true,
-    'full-height': !isAddingEntity,
+    'full-height': !isAddingEntity || isLoading,
     'playlist-player': true
   }"
 >
@@ -41,7 +41,7 @@
   <div
     class="filler flexrow video-container"
     ref="video-container"
-    v-show="!isAddingEntity"
+    v-show="!isAddingEntity || isLoading"
   >
     <raw-video-player
       class="raw-player"
@@ -53,7 +53,7 @@
       @entity-change="onPlayerEntityChange"
       @time-update="onTimeUpdate"
       @max-duration-update="onMaxDurationUpdate"
-      v-show="isCurrentEntityMovie"
+      v-show="isCurrentEntityMovie && !isLoading"
     />
     <raw-video-player
       ref="raw-player-comparison"
@@ -61,13 +61,14 @@
       :is-repeating="isRepeating"
       :muted="true"
       :entities="entityListToCompare"
-      v-show="isComparing && isMovieComparison"
+      name="comparison"
+      v-show="isComparing && isMovieComparison && !isLoading"
     />
 
     <p
       :style="{width: '100%'}"
       class="preview-standard-file has-text-centered"
-      v-if="isCurrentEntityFile && currentEntity.preview_file_extension"
+      v-if="isCurrentEntityFile && currentEntity.preview_file_extension && !isLoading"
     >
       <a
         class="button"
@@ -84,7 +85,7 @@
     <div
       class="picture-preview-wrapper"
       ref="picture-player-wrapper"
-      v-show="isCurrentEntityPicture"
+      v-show="isCurrentEntityPicture && !isLoading"
     >
        <img
          ref="picture-player"
@@ -95,7 +96,7 @@
     </div>
     <div
       class="picture-preview-comparison-wrapper"
-      v-show="isComparing && isPictureComparison"
+      v-show="isComparing && isPictureComparison && !isLoading"
     >
        <img
          ref="picture-player-comparison"
@@ -103,6 +104,9 @@
          :src="currentComparisonEntityPicturePath"
          v-show="isComparing && isPictureComparison"
        />
+    </div>
+    <div class="loading-wrapper" v-if="isLoading">
+      <spinner />
     </div>
 
     <div class="canvas-wrapper" ref="canvas-wrapper">
@@ -128,7 +132,7 @@
   <div
     class="playlist-progress"
     ref="playlist-progress"
-    v-if="!isAddingEntity"
+    v-show="!isAddingEntity"
     :style="{
       display: isCurrentEntityMovie ? 'flex' : 'none'
     }"
@@ -207,6 +211,13 @@
         icon="right"
         @click="onNextPictureClicked"
       />
+      <a
+        class="button playlist-button flexrow-item"
+        :href="currentEntityPicturePath"
+        target="blank"
+      >
+        <arrow-up-right-icon class="icon" />
+      </a>
     </div>
 
     <div
@@ -315,7 +326,7 @@
 
     <div
       class="flexrow"
-      v-if="isCurrentEntityMovie || isCurrentEntityPicture"
+      v-if="!isCurrentUserCGArtist && (isCurrentEntityMovie || isCurrentEntityPicture)"
     >
       <button-simple
         class="playlist-button flexrow-item"
@@ -564,9 +575,9 @@
 import moment from 'moment-timezone'
 import { mapActions, mapGetters } from 'vuex'
 import { fabric } from 'fabric'
-import { DownloadIcon, RepeatIcon } from 'vue-feather-icons'
+import { ArrowUpRightIcon, DownloadIcon, RepeatIcon } from 'vue-feather-icons'
 
-import { roundToFrame } from '../../../lib/video'
+import { formatFrame, formatTime, roundToFrame } from '../../../lib/video'
 import AnnotationBar from './AnnotationBar'
 import ButtonSimple from '../../widgets/ButtonSimple'
 import ColorPicker from '../../widgets/ColorPicker'
@@ -579,7 +590,7 @@ import SelectTaskTypeModal from '../../modals/SelectTaskTypeModal'
 import Spinner from '../../widgets/Spinner'
 import TaskInfo from '../../sides/TaskInfo'
 
-import { annotationMixin } from '../../previews/annotation_mixin'
+import { annotationMixin } from '@/components/mixins/annotation_mixin'
 
 export default {
   name: 'playlist-player',
@@ -587,6 +598,7 @@ export default {
 
   components: {
     AnnotationBar,
+    ArrowUpRightIcon,
     ButtonSimple,
     ColorPicker,
     Combobox,
@@ -634,7 +646,7 @@ export default {
       color: '#ff3860',
       currentComparisonEntityPictureIndex: 0,
       currentEntityPictureIndex: 0,
-      currentTime: '00:00.00',
+      currentTime: '00:00.000',
       currentTimeRaw: 0,
       fabricCanvas: null,
       isDlButtonsHidden: true,
@@ -647,7 +659,7 @@ export default {
       isShowingPalette: false,
       isShowingPencilPalette: false,
       isEntitiesHidden: false,
-      maxDuration: '00:00.00',
+      maxDuration: '00:00.000',
       maxDurationRaw: 0,
       palette: ['#ff3860', '#008732', '#5E60BA', '#f57f17'],
       pencil: 'big',
@@ -687,6 +699,7 @@ export default {
     } else {
       this.entityList = []
     }
+    if (!this.playlist.name) this.isLoading = true
     this.updateProgressBar()
     if (this.picturePlayer) this.picturePlayer.onload = this.resetPictureCanvas
     this.$nextTick(() => {
@@ -709,6 +722,7 @@ export default {
     ...mapGetters([
       'assetTaskTypes',
       'currentProduction',
+      'isCurrentUserCGArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'taskMap',
@@ -858,7 +872,7 @@ export default {
     },
 
     currentFrame () {
-      return `${Math.floor(this.currentTimeRaw * this.fps)}`.padStart(3, '0')
+      return formatFrame(this.currentTimeRaw, this.fps)
     },
 
     deleteText () {
@@ -948,18 +962,9 @@ export default {
       return date.format('YYYY-MM-DD HH:mm')
     },
 
-    formatTime (seconds) {
-      let milliseconds = `.${Math.round((seconds % 1) * 100)}`
-      if (milliseconds.length === 2) milliseconds += '0'
-      try {
-        return new Date(1000 * seconds)
-          .toISOString()
-          .substr(14, 5) + milliseconds
-      } catch (err) {
-        console.error(err)
-        return '00:00.00'
-      }
-    },
+    formatFrame,
+
+    formatTime,
 
     getTimelinePosition (time, index) {
       if (this.$refs.movie && this.progress) {
@@ -1126,7 +1131,9 @@ export default {
       this.clearCanvas()
       this.rawPlayer.goPreviousFrame()
       if (this.isComparing) {
-        this.$refs['raw-player-comparison'].goPreviousFrame()
+        this.$refs['raw-player-comparison'].setCurrentTime(
+          this.rawPlayer.getCurrentTime()
+        )
       }
       const annotation = this.getAnnotation(this.rawPlayer.getCurrentTime())
       if (annotation) this.loadAnnotation(annotation)
@@ -1136,7 +1143,9 @@ export default {
       this.clearCanvas()
       this.rawPlayer.goNextFrame()
       if (this.isComparing) {
-        this.$refs['raw-player-comparison'].goNextFrame()
+        this.$refs['raw-player-comparison'].setCurrentTime(
+          this.rawPlayer.getCurrentTime()
+        )
       }
       const annotation = this.getAnnotation(this.rawPlayer.getCurrentTime())
       if (annotation) this.loadAnnotation(annotation)
@@ -1319,11 +1328,12 @@ export default {
             .then(() => {
               this.reloadAnnotations()
             })
-        }, 100)
+        }, 200)
       }
     },
 
     reloadAnnotations () {
+      if (!this.annotations) return
       const annotations = this.annotations.map(a => ({ ...a }))
       this.annotations = []
       setTimeout(() => {
@@ -1336,6 +1346,7 @@ export default {
       this.isEntitiesHidden = !this.isEntitiesHidden
       this.$nextTick(() => {
         this.resetHeight()
+        this.reloadAnnotations()
         this.scrollToEntity(this.playingEntityIndex)
       })
     },
@@ -1354,7 +1365,7 @@ export default {
       this.$nextTick(() => {
         this.$refs['task-info'].focusCommentTextarea()
         this.resetHeight()
-        setTimeout(this.reloadCurrentAnnotation, 300)
+        this.reloadAnnotations()
       })
     },
 
@@ -1408,8 +1419,8 @@ export default {
     onPlayerEntityChange (entityIndex) {
       if (this.isCurrentEntityMovie) {
         this.playingEntityIndex = entityIndex
-        if (this.rawPlayerComparison) {
-          const comparisonIndex = this.rawPlayerComparison.playingIndex
+        if (this.isComparing) {
+          const comparisonIndex = this.rawPlayerComparison.currentIndex
           if (comparisonIndex < entityIndex) {
             this.rawPlayerComparison.playNext()
             this.rawPlayerComparison.setCurrentTime(0)
@@ -1476,9 +1487,9 @@ export default {
         if (!this.isCommentsHidden) {
           this.$refs['task-info'].$el.style.height = `${height}px`
         }
-        if (this.rawPlayer) this.rawPlayer.resetHeight()
+        if (this.rawPlayer) this.rawPlayer.resetHeight(height)
         if (this.isComparing) {
-          this.$refs['raw-player-comparison'].resetHeight()
+          this.$refs['raw-player-comparison'].resetHeight(height)
           if (this.$refs['picture-preview-wrapper']) {
             this.$refs['picture-preview-wrapper'].style.height = `${height}px`
           }
@@ -1526,7 +1537,10 @@ export default {
               const naturalWidth = this.picturePlayer.naturalWidth
               const naturalHeight = this.picturePlayer.naturalHeight
               const ratio = naturalWidth / naturalHeight
-              const fullWidth = this.$refs['video-container'].offsetWidth
+              let fullWidth = this.$refs['video-container'].offsetWidth
+              if (!this.isCommentsHidden) {
+                fullWidth -= 450 // task info widget width
+              }
               const fullHeight = this.$refs['video-container'].offsetHeight
 
               let width = ratio ? fullHeight * ratio : fullWidth
@@ -1789,6 +1803,12 @@ export default {
         let annotation = this.annotations.find(
           (annotation) => annotation.time === time
         )
+        if (!annotation) {
+          annotation = this.annotations.find(
+            (annotation) => annotation.time > time - 0.2 && annotation.time <
+            time + 0.2
+          )
+        }
         if (!annotation &&
           this.isCurrentEntityPicture &&
           this.annotations.length > 0
@@ -1842,7 +1862,7 @@ export default {
         this.$refs['raw-player-comparison'].clear()
       }
       this.maxDurationRaw = 0
-      this.maxDuration = '00:00.00'
+      this.maxDuration = '00:00.000'
     },
 
     onPreviousPictureClicked () {
@@ -2348,5 +2368,16 @@ progress {
 
 .disabled {
   color: $grey-strong;
+}
+
+.loading-wrapper {
+  width: 100%;
+}
+
+.playlist-player a.playlist-button {
+  margin-top: 3px;
+  svg {
+    width: 18px;
+  }
 }
 </style>

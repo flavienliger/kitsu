@@ -47,3 +47,9 @@ and doing software. They can focus more on the artistic work.
 Visit [cg-wire.com](https://cg-wire.com) for more information.
 
 [![CGWire Logo](https://zou.cg-wire.com/cgwire.png)](https://cg-wire.com)
+
+
+## Launch avec docker
+set KITSU_API_TARGET=http://localhost/api
+set KITSU_EVENT_TARGET=http://localhost
+npm run serve

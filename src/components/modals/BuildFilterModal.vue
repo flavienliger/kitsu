@@ -11,6 +11,37 @@
         {{ $t('entities.build_filter.title') }}
       </h1>
 
+      <combobox
+        class="flexrow-item"
+        :options="general.unionOptions"
+        locale-key-prefix="entities.build_filter."
+        v-model="union"
+      />
+
+      <h3
+        class="subtitle"
+        v-if="isAssets"
+      >
+        {{ $t('entities.build_filter.asset_type') }}
+      </h3>
+
+      <div
+        class="flexrow asset-type-filter"
+        v-if="isAssets"
+      >
+        <combobox
+          class="flexrow-item"
+          :options="general.operatorOptions"
+          locale-key-prefix="entities.build_filter."
+          v-model="assetTypeFilters.operator"
+        />
+        <combobox
+          class="flexrow-item"
+          :options="assetTypeOptions"
+          v-model="assetTypeFilters.value"
+        />
+      </div>
+
       <h3 class="subtitle">
         {{ $t('entities.build_filter.status') }}
       </h3>
@@ -27,16 +58,28 @@
         />
         <combobox
           class="flexrow-item"
-          :options="general.operatorOptions"
+          :options="general.taskTypeOperatorOptions"
+          @input="onTaskTypeOperatorChanged(taskTypeFilter)"
           locale-key-prefix="entities.build_filter."
           v-model="taskTypeFilter.operator"
         />
-        <combobox-status
-          class="flexrow-item"
-          :task-status-list="taskStatus"
-          v-model="taskTypeFilter.statusId"
-        />
+        <div class="flexrow-item flexrow value-column">
+          <combobox-status
+            class="flexrow-item"
+            :key="'task-type-value-' + index"
+            :task-status-list="productionTaskStatuses"
+            v-model="taskTypeFilter.values[index]"
+            v-for="(statusId, index) in taskTypeFilter.values"
+          />
+          <button-simple
+            class="mt05"
+            icon="plus"
+            @click="addInTaskTypeFilter(taskTypeFilter)"
+            v-if="taskTypeFilter.operator === 'in'"
+          />
+        </div>
         <button-simple
+          class="mt05"
           icon="minus"
           @click="removeTaskTypeFilter(taskTypeFilter)"
         />
@@ -182,6 +225,10 @@ export default {
 
   data () {
     return {
+      assetTypeFilters: {
+        operator: '=',
+        value: ''
+      },
       assignation: {
         person: null,
         taskTypeId: '',
@@ -198,6 +245,15 @@ export default {
         operatorOptions: [
           { label: 'equal', value: '=' },
           { label: 'not_equal', value: '=-' }
+        ],
+        taskTypeOperatorOptions: [
+          { label: 'equal', value: '=' },
+          { label: 'not_equal', value: '=-' },
+          { label: 'in', value: 'in' }
+        ],
+        unionOptions: [
+          { label: 'union_and', value: 'and' },
+          { label: 'union_or', value: 'or' }
         ]
       },
       hasThumbnail: {
@@ -213,7 +269,8 @@ export default {
       },
       taskTypeFilters: {
         values: []
-      }
+      },
+      union: 'and'
     }
   },
 
@@ -225,23 +282,37 @@ export default {
   computed: {
     ...mapGetters([
       'assetMetadataDescriptors',
+      'assetTypeMap',
       'assetSearchText',
       'assetValidationColumns',
       'currentProduction',
       'isCurrentUserVendor',
       'people',
       'personMap',
+      'productionAssetTypes',
+      'productionTaskStatuses',
+      'productionTaskTypes',
       'shotMetadataDescriptors',
       'shotSearchText',
       'shotValidationColumns',
-      'taskTypes',
       'taskTypeMap',
-      'taskStatus',
       'taskStatusMap'
     ]),
 
     isAssets () {
       return this.entityType === 'asset'
+    },
+
+    assetTypeOptions () {
+      return [
+        { label: this.$t('entities.build_filter.all_types'), value: '-' },
+        ...this.productionAssetTypes.map((assetType) => {
+          return {
+            label: assetType.name,
+            value: assetType.id
+          }
+        })
+      ]
     },
 
     taskTypeList () {
@@ -285,11 +356,24 @@ export default {
 
     buildFilter () {
       let query = ''
+      query = this.applyAssetTypeChoice(query)
       query = this.applyTaskTypeChoice(query)
       query = this.applyDescriptorChoice(query)
       query = this.applyAssignationChoice(query)
       query = this.applyThumbnailChoice(query)
+      query = this.applyUnionChoice(query)
       return query.trim()
+    },
+
+    applyAssetTypeChoice (query) {
+      const value = this.assetTypeFilters.value
+      if (value && value !== '-') {
+        let operator = '=['
+        if (this.assetTypeFilters.operator === '=-') operator = '=[-'
+        const assetType = this.assetTypeMap[value]
+        query += ` type${operator}${assetType.name}]`
+      }
+      return query
     },
 
     applyTaskTypeChoice (query) {
@@ -297,8 +381,10 @@ export default {
         let operator = '=['
         if (taskTypeFilter.operator === '=-') operator = '=[-'
         const taskType = this.getTaskType(taskTypeFilter.id)
-        const taskStatus = this.taskStatusMap[taskTypeFilter.statusId]
-        query += ` [${taskType.name}]${operator}${taskStatus.short_name}]`
+        const value = taskTypeFilter.values.map(statusId => {
+          return this.taskStatusMap[statusId].short_name
+        }).join(',')
+        query += ` [${taskType.name}]${operator}${value}]`
       })
       return query
     },
@@ -335,16 +421,27 @@ export default {
       return query
     },
 
+    applyUnionChoice (query) {
+      if (this.union === 'or') {
+        query = ` +(${query.trim()})`
+      }
+      return query
+    },
+
     // Task types
 
     addTaskTypeFilter () {
       const filter = {
         id: this.taskTypeList[0].id,
         operator: '=',
-        statusId: this.taskStatus[0].id
+        values: [this.productionTaskStatuses[0].id]
       }
       this.taskTypeFilters.values.push(filter)
       return filter
+    },
+
+    addInTaskTypeFilter (taskTypeFilter) {
+      taskTypeFilter.values.push(this.productionTaskStatuses[0].id)
     },
 
     removeTaskTypeFilter (taskTypeFilter) {
@@ -401,20 +498,23 @@ export default {
       const searchQuery =
         this.isAssets ? this.assetSearchText : this.shotSearchText
       if (searchQuery) {
-        const filters = getFilters(
-          [], // entry list is not needed,
-          this.taskTypes,
-          this.taskStatus,
-          this.metadataDescriptors,
-          this.people,
-          searchQuery
-        )
+        const filters = getFilters({
+          entryIndex: [], // entry list is not needed,
+          assetTypes: this.productionAsseTypes,
+          taskTypes: this.productionTaskTypes,
+          taskStatuses: this.productionTaskStatuses,
+          descriptors: this.metadataDescriptors,
+          persons: this.people,
+          query: searchQuery
+        })
         filters.forEach((filter) => {
-          if (filter.type === 'status') {
+          if (filter.type === 'assettype') {
+            this.setFiltersFromAssetTypeQuery(filter)
+          } else if (filter.type === 'status') {
             this.setFiltersFromStatusQuery(filter)
-          } if (filter.type === 'descriptor') {
+          } else if (filter.type === 'descriptor') {
             this.setFiltersFromDescriptorQuery(filter)
-          } if (filter.type === 'assignation') {
+          } else if (filter.type === 'assignation') {
             this.setFiltersFromAssignationQuery(filter)
           } else if (filter.type === 'assignedto') {
             this.setFiltersFromAssignedToQuery(filter)
@@ -422,14 +522,28 @@ export default {
             this.setFiltersFromThumbnailQuery(filter)
           }
         })
+        if (filters.union) {
+          this.setUnion()
+        }
       }
     },
 
+    setFiltersFromAssetTypeQuery (filter) {
+      this.assetTypeFilters.operator = filter.excluding ? '=-' : '='
+      this.assetTypeFilters.value = filter.assetType.id
+    },
+
     setFiltersFromStatusQuery (filter) {
+      let operator = '='
+      if (filter.taskStatuses.length > 1) {
+        operator = 'in'
+      } else if (filter.excluding) {
+        operator = '='
+      }
       this.taskTypeFilters.values.push({
         id: filter.taskType.id,
-        operator: filter.excluding ? '=-' : '=',
-        statusId: filter.taskStatus.id
+        operator,
+        values: filter.taskStatuses
       })
     },
 
@@ -463,7 +577,17 @@ export default {
       }
     },
 
+    setUnion () {
+      this.union = 'or'
+    },
+
     // General
+
+    onTaskTypeOperatorChanged (taskTypeFilter) {
+      if (taskTypeFilter.operator !== 'in') {
+        taskTypeFilter.values = [taskTypeFilter.values[0]]
+      }
+    },
 
     reset () {
       this.assignation.value = 'nofilter'
@@ -472,6 +596,8 @@ export default {
       this.hasThumbnail.value = 'nofilter'
       this.metadataDescriptorFilters.values = []
       this.taskTypeFilters.values = []
+      this.assetTypeFilters.operator = '='
+      this.assetTypeFilters.value = '-'
     }
   },
 
@@ -479,7 +605,8 @@ export default {
     active () {
       if (this.active) {
         this.reset()
-        this.assignation.taskTypeId = this.taskTypeList[0].id
+        this.assignation.taskTypeId =
+          this.taskTypeList.length > 0 ? this.taskTypeList[0].id : ''
         this.setFiltersFromCurrentQuery()
       }
     }
@@ -518,5 +645,14 @@ export default {
   .descriptor-text-value {
     padding: 0;
   }
+}
+
+.task-type-filter {
+  align-items: flex-start;
+}
+
+.value-column {
+  flex-direction: column;
+  align-items: flex-start;
 }
 </style>

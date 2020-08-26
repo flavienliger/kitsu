@@ -4,6 +4,7 @@ import VueRouter from 'vue-router'
 
 import i18n from '../../../src/lib/i18n'
 import BuildFilterModal from '../../../src/components/modals/BuildFilterModal'
+import productionStoreFixture from '../fixtures/production-store.js'
 
 const localVue = createLocalVue()
 localVue.use(Vuex)
@@ -30,6 +31,16 @@ describe('BuildFilterModal', () => {
         ],
         assetSearchText: (state) => state.assetSearchText,
         assetValidationColumns: () => ['task-type-1', 'task-type-2'],
+        assetTypeMap: () => ({
+          'asset-type-1': { id: 'asset-type-1', name: 'chars' },
+          'asset-type-2': { id: 'asset-type-2', name: 'sets' },
+          'asset-type-3': { id: 'asset-type-3', name: 'props' }
+        }),
+        assetTypes: () => [
+          { id: 'asset-type-1', name: 'chars' },
+          { id: 'asset-type-2', name: 'sets' },
+          { id: 'asset-type-3', name: 'props' }
+        ],
       },
       mutations: {
         'CHANGE_SEARCH': (state, query) => state.assetSearchText = query
@@ -48,16 +59,6 @@ describe('BuildFilterModal', () => {
         ],
         shotSearchText: () => '',
         shotValidationColumns: () => ['task-type-3', 'task-type-4']
-      },
-      actions: {}
-    }
-    productionStore = {
-      getters: {
-        currentProduction: () => ({
-          id: 'production-1',
-          name: 'Caminandes',
-          team: ['person-2', 'person-3']
-        })
       },
       actions: {}
     }
@@ -86,7 +87,7 @@ describe('BuildFilterModal', () => {
           { id: 'task-type-4', name: 'Animation' }
         ],
         taskStatus: () => [
-          { id: 'task-status-1', short_name: 'WFA' },
+          { id: 'task-status-1', short_name: 'Done' },
           { id: 'task-status-2', short_name: 'WIP' },
           { id: 'task-status-3', short_name: 'Retake' }
         ],
@@ -108,7 +109,7 @@ describe('BuildFilterModal', () => {
       strict: true,
       modules: {
         assets: assetStore,
-        productions: productionStore,
+        productions: { ...productionStoreFixture },
         people: peopleStore,
         shots: shotStore,
         tasks: taskStore
@@ -140,7 +141,7 @@ describe('BuildFilterModal', () => {
               {
                 id: 'task-type-1' ,
                 operator: '=' ,
-                statusId: 'task-status-2'
+                values: ['task-status-2']
               }
             ]
           }
@@ -212,7 +213,7 @@ describe('BuildFilterModal', () => {
                 {
                   id: 'task-type-1' ,
                   operator: '=' ,
-                  statusId: 'task-status-2'
+                  values: ['task-status-2']
                 }
               ]
             }
@@ -222,6 +223,28 @@ describe('BuildFilterModal', () => {
           expect(wrapper.emitted().confirm[0][0]).toBe('[Modeling]=[WIP]')
       })
       describe('Build filter', () => {
+        describe('asset types', () => {
+          it('type is', () => {
+            wrapper.setData({
+              assetTypeFilters: {
+                operator: '=' ,
+                value: 'asset-type-1'
+              }
+            })
+            const query = wrapper.vm.buildFilter()
+            expect(query).toBe('type=[chars]')
+          })
+          it('type is not', () => {
+            wrapper.setData({
+              assetTypeFilters: {
+                operator: '=' ,
+                value: 'asset-type-1'
+              }
+            })
+            const query = wrapper.vm.buildFilter()
+            expect(query).toBe('type=[chars]')
+          })
+        })
         describe('task types', () => {
           it('status is', () => {
             wrapper.setData({
@@ -230,7 +253,7 @@ describe('BuildFilterModal', () => {
                   {
                     id: 'task-type-1' ,
                     operator: '=' ,
-                    statusId: 'task-status-2'
+                    values: ['task-status-2']
                   }
                 ]
               }
@@ -245,7 +268,7 @@ describe('BuildFilterModal', () => {
                   {
                     id: 'task-type-1' ,
                     operator: '=-' ,
-                    statusId: 'task-status-2'
+                    values: ['task-status-2']
                   }
                 ]
               }
@@ -348,6 +371,19 @@ describe('BuildFilterModal', () => {
             expect(query).toBe('-withthumbnail')
           })
         })
+        describe('union', () => {
+          it('or', () => {
+            wrapper.setData({
+              assignation: {
+                value: 'assignedto',
+                person: {id: 'person-1', name: 'John'}
+              },
+              union: 'or'
+            })
+            const query = wrapper.vm.buildFilter()
+            expect(query).toBe('+(assignedto=[John])')
+          })
+        })
       })
 
       describe('Set values from query', () => {
@@ -366,7 +402,7 @@ describe('BuildFilterModal', () => {
               {
                 id: 'task-type-1' ,
                 operator: '=' ,
-                statusId: 'task-status-2'
+                values: ['task-status-2']
               }
             ])
           })
@@ -377,7 +413,18 @@ describe('BuildFilterModal', () => {
               {
                 id: 'task-type-1' ,
                 operator: '=' ,
-                statusId: 'task-status-2'
+                values: ['task-status-2']
+              }
+            ])
+          })
+          it('status in', () => {
+            changeSearch('Modeling=WIP,Done')
+            wrapper.vm.setFiltersFromCurrentQuery()
+            expect(wrapper.vm.taskTypeFilters.values).toStrictEqual([
+              {
+                id: 'task-type-1' ,
+                operator: 'in',
+                values: ['task-status-2', 'task-status-1']
               }
             ])
           })
@@ -444,6 +491,18 @@ describe('BuildFilterModal', () => {
             expect(wrapper.vm.hasThumbnail.value).toBe('-withthumbnail')
           })
         })
+        describe('union', () => {
+          it('and', () => {
+            changeSearch('[Modeling]=assigned assignedto=[John]')
+            wrapper.vm.setFiltersFromCurrentQuery()
+            expect(wrapper.vm.union).toBe('and')
+          })
+          it('or', () => {
+            changeSearch('+([Modeling]=assigned assignedto=[John])')
+            wrapper.vm.setFiltersFromCurrentQuery()
+            expect(wrapper.vm.union).toBe('or')
+          })
+        })
       })
 
       describe('Task type filters', () => {
@@ -453,7 +512,7 @@ describe('BuildFilterModal', () => {
           expect(wrapper.vm.taskTypeFilters.values).toStrictEqual([{
             id: 'task-type-1',
             operator: '=',
-            statusId: 'task-status-1',
+            values: ['task-status-1'],
           }])
           wrapper.vm.addTaskTypeFilter()
           expect(wrapper.vm.taskTypeFilters.values.length).toBe(2)

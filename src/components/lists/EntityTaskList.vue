@@ -38,9 +38,9 @@
           @click="selectTask(getTask(taskId))"
           v-for="taskId in entries"
         >
-          <task-type-name
+          <task-type-cell
             class="type"
-            :entry="getTaskType(taskId)"
+            :task-type="getTaskType(taskId)"
             :production-id="currentProduction.id"
             v-if="getTaskType(taskId)"
           />
@@ -52,7 +52,10 @@
             />
           </td>
           <td class="assignees">
-            <div class="flexrow">
+            <div
+              class="flexrow"
+              v-if="!isCurrentUserClient && !isCurrentUserVendor"
+            >
               <div
                 class="avatar-wrapper"
                 :key="personId"
@@ -80,17 +83,17 @@
 <script>
 import { mapGetters, mapActions } from 'vuex'
 
-import TaskTypeName from '../cells/TaskTypeName'
+import TaskTypeCell from '../cells/TaskTypeName'
 import TableInfo from '../widgets/TableInfo'
 import ValidationTag from '../widgets/ValidationTag'
 import PeopleAvatar from '../widgets/PeopleAvatar'
 
 export default {
-  name: 'todos-list',
+  name: 'entity-task-list',
 
   components: {
     TableInfo,
-    TaskTypeName,
+    TaskTypeCell,
     PeopleAvatar,
     ValidationTag
   },
@@ -119,6 +122,8 @@ export default {
   computed: {
     ...mapGetters([
       'currentProduction',
+      'isCurrentUserClient',
+      'isCurrentUserVendor',
       'personMap',
       'taskMap',
       'taskTypeMap'

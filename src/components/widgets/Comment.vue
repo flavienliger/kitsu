@@ -16,10 +16,9 @@
         <span
           class="round-task-status-name"
           :style="{
-            'background-color': comment.task_status.color,
-            color: 'white'
+            'background-color': statusColor,
+            color: comment.task_status.short_name === 'todo' ? 'grey' : 'white'
           }"
-          v-if="comment.task_status.short_name !== 'todo'"
         >
           {{ comment.task_status.short_name }}
         </span>
@@ -166,10 +165,9 @@
       <span
         class="round-task-status-name flexrow-item"
         :style="{
-          'border': '1px solid' + comment.task_status.color,
-          color: comment.task_status.color
+          'border': '1px solid ' + (comment.task_status.short_name === 'todo' ? 'grey' : statusColor),
+          color: comment.task_status.short_name === 'todo' ? 'grey' : statusColor
         }"
-        v-if="comment.task_status.short_name !== 'todo'"
       >
         {{ comment.task_status.short_name }}
       </span>
@@ -212,6 +210,7 @@ import { remove } from '../../lib/models'
 import { renderComment } from '../../lib/render'
 import { sortByName } from '../../lib/sorting'
 import { formatDate, parseDate } from '../../lib/time'
+import colors from '@/lib/colors'
 
 import {
   ChevronDownIcon,
@@ -247,6 +246,10 @@ export default {
     comment: {
       type: Object,
       default: () => {}
+    },
+    task: {
+      type: Object,
+      default: null
     },
     highlighted: {
       type: Boolean,
@@ -284,6 +287,7 @@ export default {
   computed: {
     ...mapGetters([
       'currentProduction',
+      'isDarkTheme',
       'user',
       'personMap',
       'taskMap',
@@ -297,6 +301,7 @@ export default {
           !this.comment.checklist ||
           this.comment.checklist.length === 0
         ) &&
+        this.comment.attachment_files.length === 0 &&
         this.comment.previews.length === 0 && !(
           this.isFirst && this.taskStatus.is_done
         )
@@ -321,12 +326,14 @@ export default {
           }
         }
       }
-      if (this.$route.params.episode_id) {
+      if (this.task.episode_id) {
         route.name = `episode-${route.name}`
-        route.params.episode_id = this.$route.params.episode_id
+        route.params.episode_id = this.task.episode_id
+      } else if (this.task.entity && this.task.entity.episode_id) {
+        route.name = `episode-${route.name}`
+        route.params.episode_id = this.task.entity.episode_id
       }
-      const task = this.taskMap[this.comment.object_id]
-      const taskType = this.taskTypeMap[task.task_type_id]
+      const taskType = this.taskTypeMap[this.task.task_type_id]
       route.params.type = taskType.for_shots ? 'shots' : 'assets'
       return route
     },
@@ -398,6 +405,15 @@ export default {
 
     boxShadowStyle () {
       return `0 0 3px 2px ${this.comment.task_status.color}1F`
+    },
+
+    statusColor () {
+      const color = this.comment.task_status.color
+      if (this.isDarkTheme && !this.isEmpty) {
+        return colors.darkenColor(color)
+      } else {
+        return color
+      }
     }
   },
 

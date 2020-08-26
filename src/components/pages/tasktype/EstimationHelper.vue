@@ -113,8 +113,12 @@
                 @keydown="onKeyDown"
                 @mouseout="onInputMouseOut"
                 @mouseover="onInputMouseOver"
-                :value="formatEstimation(task.estimation)"
+                :value="formatDuration(task.estimation)"
+                v-if="isCurrentUserManager"
               />
+              <span v-else>
+                {{ formatDuration(task.estimation) }}
+              </span>
             </td>
             <td>
             </td>
@@ -251,6 +255,7 @@ export default {
     ...mapGetters([
       'assetMap',
       'currentProduction',
+      'isCurrentUserManager',
       'organisation',
       'personMap',
       'shotMap'
@@ -298,7 +303,7 @@ export default {
           return {
             ...person,
             count: countMap.get(person.id) || 0,
-            estimation: this.formatEstimation(estimation),
+            estimation: this.formatDuration(estimation),
             frames,
             quota: quota.toFixed(2),
             seconds: seconds.toFixed(2)
@@ -307,7 +312,8 @@ export default {
     },
 
     tasksByPerson () {
-      return [...this.tasks].sort(firstBy(this.compareFirstAssignees))
+      return [...this.tasks]
+        .sort(firstBy(this.compareFirstAssignees))
     }
   },
 
@@ -336,12 +342,8 @@ export default {
       } else if (b.assignees.length > 0) {
         return 1
       } else {
-        return 1
+        return -1
       }
-    },
-
-    formatEstimation (estimation) {
-      return estimation ? this.formatDuration(estimation) : 0
     },
 
     getSeconds (task) {
@@ -356,7 +358,7 @@ export default {
     estimationUpdated (event, task) {
       const value = event.target.value
       if (value && value.length > 0) {
-        const estimation = Number(event.target.value)
+        const estimation = parseFloat(event.target.value)
         this.saveEstimations(estimation, task)
       }
     },
@@ -405,9 +407,11 @@ export default {
         if (!event.ctrlKey) this.clearSelection()
         this.selectSingleTask(index)
       }
-      this.focusInput(
-        this.$refs[this.tasksByPerson[index].id + '-estimation'][0]
-      )
+      if (this.isCurrentUserManager) {
+        this.focusInput(
+          this.$refs[this.tasksByPerson[index].id + '-estimation'][0]
+        )
+      }
     },
 
     selectPrevious (shiftKey) {

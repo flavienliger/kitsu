@@ -94,7 +94,7 @@
                   :last-preview-files="lastFiveMoviePreviews"
                   :task-type-map="taskTypeMap"
                   :light="!isWide"
-                  :read-only="isCurrentUserCGArtist"
+                  :read-only="!isCurrentUserManager"
                   @annotationchanged="onAnnotationChanged"
                   @change-current-preview="changeCurrentPreview"
                   ref="preview-movie"
@@ -129,7 +129,7 @@
                 :preview="currentPreview"
                 :last-preview-files="lastFivePicturePreviews"
                 :light="!isWide"
-                :read-only="isCurrentUserCGArtist"
+                :read-only="!isCurrentUserManager"
                 @annotation-changed="onAnnotationChanged"
                 @add-preview="onAddExtraPreview"
                 @remove-extra-preview="onRemoveExtraPreview"
@@ -157,7 +157,7 @@
               :user="user"
               :team="currentTeam"
               :task="task"
-              :task-status="taskStatusForCurrentUser"
+              :task-status="getTaskStatusForCurrentUser(task.project_id)"
               :light="true"
               :is-loading="loading.addComment"
               :attached-file-name="attachedFileName"
@@ -175,6 +175,7 @@
               <comment
                 :key="'comment' + comment.id"
                 :comment="comment"
+                :task="task"
                 :light="true"
                 :add-preview="onAddPreviewClicked"
                 :is-first="index === 0"
@@ -395,7 +396,7 @@ export default {
       'previewFormData',
       'productionMap',
       'taskEntityPreviews',
-      'taskStatusForCurrentUser',
+      'getTaskStatusForCurrentUser',
       'taskTypeMap',
       'user'
     ]),

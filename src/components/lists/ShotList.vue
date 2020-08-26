@@ -81,7 +81,7 @@
            >
             {{ $t('shots.fields.time_spent') }}
           </th>
-          <th scope="col" class="frames" v-if="isShowInfos">
+          <th scope="col" class="frames" v-if="isFrames && isShowInfos">
             {{ $t('shots.fields.nb_frames') }}
           </th>
           <th scope="col" class="framein" v-if="isFrameIn && isShowInfos">
@@ -178,7 +178,7 @@
               bold: !shot.canceled}"
             >
             <div class="flexrow">
-              <entity-thumbnail :entity="shot" />
+              <entity-thumbnail :entity="shot" :empty-height="32" />
               <router-link :to="shotPath(shot.id)">
                 {{ shot.name }}
               </router-link>
@@ -209,7 +209,7 @@
             {{ formatDuration(shot.timeSpent) }}
           </td>
           <td class="frames"
-            v-if="isShowInfos"
+            v-if="isFrames && isShowInfos"
           >
             {{ shot.nb_frames }}
           </td>
@@ -244,11 +244,11 @@
           />
           <row-actions
             :entry="shot"
-            :edit-route="editPath(shot.id)"
-            :restore-route="restorePath(shot.id)"
-            :delete-route="deletePath(shot.id)"
             :hide-history="false"
+            @delete-clicked="$emit('delete-clicked', shot)"
+            @edit-clicked="$emit('edit-clicked', shot)"
             @history-clicked="$emit('shot-history', shot)"
+            @restore-clicked="$emit('restore-clicked', shot)"
             v-if="isCurrentUserManager"
           />
           <td class="actions" v-else></td>
@@ -370,6 +370,7 @@ export default {
       'isCurrentUserManager',
       'isCurrentUserClient',
       'isFps',
+      'isFrames',
       'isFrameIn',
       'isFrameOut',
       'isSingleEpisode',
@@ -682,5 +683,13 @@ th.metadata-descriptor {
 
 .task-type-name {
   max-width: 95%;
+}
+
+.datatable-row th.name {
+  font-size: 1.1em;
+  padding: 6px;
+
+  .flexrow {
+  }
 }
 </style>

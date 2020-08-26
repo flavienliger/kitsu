@@ -178,7 +178,7 @@
               bold: !asset.canceled
             }">
             <div class="flexrow">
-              <entity-thumbnail :entity="asset" />
+              <entity-thumbnail :entity="asset" :empty-height="32" />
               <router-link
                 class="asset-link"
                 :to="assetPath(asset.id)"
@@ -235,9 +235,9 @@
           />
           <row-actions v-if="isCurrentUserManager"
             :entry="asset"
-            :edit-route="editPath(asset.id)"
-            :delete-route="deletePath(asset.id)"
-            :restore-route="restorePath(asset.id)"
+            @edit-clicked="$emit('edit-clicked', asset)"
+            @delete-clicked="$emit('delete-clicked', asset)"
+            @restore-clicked="$emit('restore-clicked', asset)"
           />
           <td class="actions" v-else></td>
         </tr>
@@ -258,10 +258,10 @@
       <img src="../../assets/illustrations/empty_asset.png" />
     </p>
     <p class="info">{{ $t('assets.empty_list') }}</p>
-    <button-link
+    <button-simple
       class="level-item big-button"
       :text="$t('assets.new_assets')"
-      :path="newAssetPath()"
+      @click="$emit('new-clicked')"
     />
   </div>
   <div
@@ -279,6 +279,8 @@
     v-if="!isEmptyList && !isLoading"
   >
     {{ displayedAssetsLength }} {{ $tc('assets.number', displayedAssetsLength) }}
+    ({{ formatDuration(displayedAssetsTimeSpent) }}
+     {{ $tc('main.days_spent', displayedAssetsTimeSpent) }})
   </p>
 
 </div>
@@ -294,7 +296,6 @@ import { formatListMixin } from './format_mixin'
 import { selectionListMixin } from './selection'
 
 import DescriptionCell from '../cells/DescriptionCell'
-import ButtonLink from '../widgets/ButtonLink'
 import ButtonSimple from '../widgets/ButtonSimple'
 import EntityThumbnail from '../widgets/EntityThumbnail'
 import RowActions from '../widgets/RowActions'
@@ -306,6 +307,18 @@ import ValidationCell from '../cells/ValidationCell'
 export default {
   name: 'asset-list',
   mixins: [entityListMixin, formatListMixin, selectionListMixin],
+
+  components: {
+    ButtonSimple,
+    DescriptionCell,
+    EntityThumbnail,
+    ChevronDownIcon,
+    RowActions,
+    TableInfo,
+    TableHeaderMenu,
+    TableMetadataHeaderMenu,
+    ValidationCell
+  },
 
   props: {
     displayedAssets: {
@@ -334,19 +347,6 @@ export default {
     }
   },
 
-  components: {
-    ButtonLink,
-    ButtonSimple,
-    DescriptionCell,
-    EntityThumbnail,
-    ChevronDownIcon,
-    RowActions,
-    TableInfo,
-    TableHeaderMenu,
-    TableMetadataHeaderMenu,
-    ValidationCell
-  },
-
   computed: {
     ...mapGetters([
       'assets',
@@ -358,6 +358,7 @@ export default {
       'currentEpisode',
       'currentProduction',
       'displayedAssetsLength',
+      'displayedAssetsTimeSpent',
       'nbSelectedTasks',
       'isAssetDescription',
       'isCurrentUserAdmin',
@@ -461,18 +462,6 @@ export default {
 
     assetPath (assetId) {
       return this.getPath('asset', assetId)
-    },
-
-    editPath (assetId) {
-      return this.getPath('edit-asset', assetId)
-    },
-
-    deletePath (assetId) {
-      return this.getPath('delete-asset', assetId)
-    },
-
-    restorePath (assetId) {
-      return this.getPath('restore-asset', assetId)
     },
 
     taskTypePath (taskTypeId) {
@@ -587,8 +576,12 @@ th.metadata-descriptor {
   padding: 4px;
 }
 
-td.name {
-  font-size: 1.2em;
+.datatable-row th.name {
+  font-size: 1.1em;
+  padding: 6px;
+
+  .flexrow {
+  }
 }
 
 .asset-link {

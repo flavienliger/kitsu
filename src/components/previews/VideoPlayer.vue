@@ -120,6 +120,7 @@
           class="comparison-combobox"
           :options="taskTypeOptions"
           :is-dark="true"
+          :thin="true"
           v-model="taskTypeId"
           v-if="!readOnly && isComparing && (!light || isFullScreen())"
         />
@@ -127,6 +128,7 @@
           class="comparison-combobox"
           :options="previewFileOptions"
           :is-dark="true"
+          :thin="true"
           v-model="previewToCompareId"
           v-if="!readOnly && isComparing && (!light || isFullScreen())"
         />
@@ -370,6 +372,9 @@ export default {
     this.container.style.height = this.getDefaultHeight() + 'px'
     this.isLoading = true
     this.setupFabricCanvas()
+    this.isPlaying = false
+    this.isMuted = false
+    this.isRepeating = false
     setTimeout(() => {
       if (this.video) {
         this.video.addEventListener('loadedmetadata', () => {
@@ -605,9 +610,6 @@ export default {
       this.progress.setAttribute('max', this.videoDuration)
       this.maxDuration = this.formatTime(this.videoDuration)
       this.isLoading = false
-      this.isPlaying = false
-      this.isMuted = false
-      this.isRepeating = false
 
       if (this.container) {
         const dimensions = this.getDimensions()

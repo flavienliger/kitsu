@@ -1,7 +1,6 @@
 import Vue from 'vue'
 
 import assetsApi from '../api/assets'
-import breakdownApi from '../api/breakdown'
 import peopleApi from '../api/people'
 import tasksStore from './tasks'
 import taskTypesStore from './tasktypes'
@@ -46,18 +45,9 @@ import {
   LOAD_ASSETS_START,
   LOAD_ASSETS_ERROR,
   LOAD_ASSETS_END,
-  LOAD_ASSET_CAST_IN_END,
 
-  EDIT_ASSET_START,
-  EDIT_ASSET_ERROR,
   EDIT_ASSET_END,
 
-  DELETE_ASSET_START,
-  DELETE_ASSET_ERROR,
-  DELETE_ASSET_END,
-
-  RESTORE_ASSET_START,
-  RESTORE_ASSET_ERROR,
   RESTORE_ASSET_END,
 
   ADD_ASSET,
@@ -115,6 +105,24 @@ const helpers = {
   },
   getPerson (personId) {
     return peopleStore.state.personMap[personId]
+  },
+
+  setListStats (state, assets) {
+    let timeSpent = 0
+    if (assets) {
+      assets.forEach((asset) => {
+        timeSpent += asset.timeSpent
+      })
+      Object.assign(state, {
+        displayedAssetsLength: assets.length,
+        displayedAssetsTimeSpent: timeSpent
+      })
+    } else {
+      Object.assign(state, {
+        displayedAssetsLength: 0,
+        displayedAssetsTimeSpent: 0
+      })
+    }
   },
 
   populateTask (task, asset, production) {
@@ -205,14 +213,15 @@ const helpers = {
 
     const query = assetSearch
     const keywords = getKeyWords(query) || []
-    const filters = getFilters(
-      cache.assetIndex,
+    const filters = getFilters({
+      entryIndex: cache.assetIndex,
+      assetTypes: state.assetTypes,
       taskTypes,
       taskStatuses,
-      production.descriptors || [],
+      descriptors: production.descriptors || [],
       persons,
       query
-    )
+    })
     let result = indexSearch(cache.assetIndex, keywords) || cache.assets
     result = applyFilters(result, filters, taskMap)
     result = sortAssetResult(
@@ -230,7 +239,7 @@ const helpers = {
 
     state.displayedAssets = displayedAssets
     state.assetFilledColumns = getFilledColumns(displayedAssets)
-    state.displayedAssetsLength = result ? result.length : 0
+    helpers.setListStats(state, result)
     state.assetSearchText = query
     state.assetSelectionGrid = buildSelectionGrid(maxX, maxY)
   }
@@ -250,6 +259,7 @@ const initialState = {
   filteredAssets: [],
   displayedAssets: [],
   displayedAssetsLength: 0,
+  displayedAssetsTimeSpent: 0,
   assetFilledColumns: {},
   assetSearchText: '',
   assetSelectionGrid: {},
@@ -269,22 +279,6 @@ const initialState = {
   assetsCsvFormData: null,
 
   assetCreated: '',
-  editAsset: {
-    isCreateError: false,
-    isLoading: false,
-    isError: false
-  },
-
-  deleteAsset: {
-    isLoading: false,
-    isError: false
-  },
-
-  restoreAsset: {
-    isLoading: false,
-    isError: false
-  },
-
   personTasks: [],
   assetListScrollPosition: 0
 }
@@ -306,6 +300,7 @@ const getters = {
 
   displayedAssets: state => state.displayedAssets,
   displayedAssetsLength: state => state.displayedAssetsLength,
+  displayedAssetsTimeSpent: state => state.displayedAssetsTimeSpent,
   assetFilledColumns: state => state.assetFilledColumns,
 
   displayedAssetTypes: state => state.displayedAssetTypes,
@@ -322,15 +317,11 @@ const getters = {
   },
 
   assetsByType: state => {
-    return groupEntitiesByParents(
-      Object.values(state.displayedAssets),
-      'asset_type_name'
-    )
+    const activeAssets = state.displayedAssets
+      .filter(a => !a.canceled)
+    return groupEntitiesByParents(activeAssets, 'asset_type_name')
   },
 
-  editAsset: state => state.editAsset,
-  deleteAsset: state => state.deleteAsset,
-  restoreAsset: state => state.restoreAsset,
   assetCreated: state => state.assetCreated,
 
   isAssetTime: state => state.isAssetTime,
@@ -401,25 +392,12 @@ const actions = {
       .catch((err) => console.error(err))
   },
 
-  loadAssetCastIn ({ commit, state, rootState }, asset) {
-    const shotMap = rootState.shots.shotMap
-    return breakdownApi.getAssetCastIn(asset)
-      .then((castIn) => {
-        commit(LOAD_ASSET_CAST_IN_END, { asset, castIn, shotMap })
-      })
-  },
-
-  newAsset ({ commit, dispatch, state, rootGetters }, { data, callback }) {
+  newAsset ({ commit, dispatch, state, rootGetters }, data) {
     if (cache.assets.find((asset) => asset.name === data.name)) {
-      return callback()
+      return Promise.reject(new Error('Asset already exsists'))
     }
-
-    commit(EDIT_ASSET_START, data)
-    assetsApi.newAsset(data, (err, asset) => {
-      if (err) {
-        commit(EDIT_ASSET_ERROR)
-        if (callback) callback(err)
-      } else {
+    return assetsApi.newAsset(data)
+      .then((asset) => {
         const assetTypeMap = rootGetters.assetTypeMap
         commit(EDIT_ASSET_END, { newAsset: asset, assetTypeMap })
         const taskTypeIds = state.assetValidationColumns
@@ -431,42 +409,31 @@ const actions = {
             type: 'assets'
           })
         )
-
-        Promise.all(createTaskPromises).then(() => {
-          if (callback) callback()
-        }).catch((err) => {
-          console.error(err)
-        })
-      }
-    })
+        return Promise.all(createTaskPromises)
+          .then(() => {
+            return Promise.resolve(asset)
+          })
+      })
   },
 
-  editAsset ({ commit, state, rootState }, { data, callback }) {
+  editAsset ({ commit, state, rootState }, data) {
     const existingAsset = data.name && cache.assets.find((asset) => {
       return asset.name === data.name && data.id !== asset.id
     })
     if (existingAsset) {
-      return callback()
+      return Promise.reject(new Error('Asset already exsists'))
     }
-
-    commit(EDIT_ASSET_START)
     const assetTypeMap = rootState.assetTypes.assetTypeMap
-    assetsApi.updateAsset(data, (err, asset) => {
-      if (err) {
-        commit(EDIT_ASSET_ERROR)
-      } else {
+    return assetsApi.updateAsset(data)
+      .then((asset) => {
         commit(EDIT_ASSET_END, { newAsset: asset, assetTypeMap })
-      }
-      if (callback) callback(err)
-    })
+        return Promise.resolve(asset)
+      })
   },
 
-  deleteAsset ({ commit, state }, { asset, callback }) {
-    commit(DELETE_ASSET_START)
-    assetsApi.deleteAsset(asset, (err) => {
-      if (err) {
-        commit(DELETE_ASSET_ERROR)
-      } else {
+  deleteAsset ({ commit, state }, asset) {
+    return assetsApi.deleteAsset(asset)
+      .then(() => {
         const previousAsset = state.assetMap[asset.id]
         if (
           previousAsset &&
@@ -477,23 +444,16 @@ const actions = {
         } else {
           commit(REMOVE_ASSET, asset)
         }
-        commit(DELETE_ASSET_END, asset)
-      }
-      if (callback) callback(err)
-    })
+        return Promise.resolve(asset)
+      })
   },
 
-  restoreAsset ({ commit, state }, payload) {
-    commit(RESTORE_ASSET_START)
-    const asset = payload.asset
-    assetsApi.restoreAsset(asset, (err) => {
-      if (err) {
-        commit(RESTORE_ASSET_ERROR)
-      } else {
+  restoreAsset ({ commit, state }, asset) {
+    return assetsApi.restoreAsset(asset)
+      .then(() => {
         commit(RESTORE_ASSET_END, asset)
-      }
-      if (payload.callback) payload.callback(err)
-    })
+        return Promise.resolve(asset)
+      })
   },
 
   uploadAssetFile ({ commit, state }, toUpdate) {
@@ -608,7 +568,7 @@ const actions = {
       let assetLine = []
       if (rootGetters.isTVShow) {
         assetLine.push(
-          asset.episode_id ? episodeMap[asset.episode_id].name : 'All'
+          asset.episode_id ? episodeMap[asset.episode_id].name : 'MP'
         )
       }
       assetLine = assetLine.concat([
@@ -659,7 +619,7 @@ const mutations = {
     cache.assetIndex = {}
     state.displayedAssets = []
     state.assetFilledColumns = {}
-    state.displayedAssetsLength = 0
+    helpers.setListStats(state, [])
     state.assetSearchQueries = []
   },
 
@@ -674,7 +634,7 @@ const mutations = {
     cache.assetIndex = {}
     state.displayedAssets = []
     state.assetFilledColumns = {}
-    state.displayedAssetsLength = 0
+    helpers.setListStats(state, [])
     state.assetSearchQueries = []
   },
 
@@ -733,7 +693,8 @@ const mutations = {
     state.nbValidationColumns = state.assetValidationColumns.length
 
     state.displayedAssets = displayedAssets
-    state.displayedAssetsLength = cache.assets ? cache.assets.length : 0
+    helpers.setListStats(state, cache.assets)
+
     state.assetFilledColumns = filledColumns
 
     state.assetTypes = assetTypes
@@ -777,7 +738,7 @@ const mutations = {
 
     state.displayedAssets.push(asset)
     state.displayedAssets = sortAssets(state.displayedAssets)
-    state.displayedAssetsLength = cache.assets.length
+    helpers.setListStats(state, cache.assets)
     state.assetFilledColumns = getFilledColumns(state.displayedAssets)
 
     const maxX = state.displayedAssets.length
@@ -803,10 +764,7 @@ const mutations = {
         state.displayedAssetsTimeSpent -= assetToDelete.timeSpent
       }
       state.assetFilledColumns = getFilledColumns(state.displayedAssets)
-      state.displayedAssetsLength = Math.max(
-        state.displayedAssetsLength - 1,
-        0
-      )
+      helpers.setListStats(state, cache.assets)
       cache.assetIndex = buildAssetIndex(cache.assets)
     }
   },
@@ -819,20 +777,7 @@ const mutations = {
     state.assetsCsvFormData = null
   },
 
-  [EDIT_ASSET_START] (state, data) {
-    state.editAsset.isLoading = true
-    state.editAsset.isError = false
-  },
-
-  [EDIT_ASSET_ERROR] (state) {
-    state.editAsset.isLoading = false
-    state.editAsset.isError = true
-    state.editAsset.isCreateError = true
-  },
-
   [EDIT_ASSET_END] (state, { newAsset, assetTypeMap }) {
-    state.editAsset.isCreateError = false
-    state.editAsset.isSuccess = true
     state.assetCreated = newAsset.name
 
     const asset = state.assetMap[newAsset.id]
@@ -863,81 +808,19 @@ const mutations = {
       state.assetSelectionGrid = buildSelectionGrid(maxX, maxY)
       state.assetMap[newAsset.id] = newAsset
     }
-    state.editAsset = {
-      isLoading: false,
-      isError: false
-    }
     if (newAsset.description && !state.isAssetDescription) {
       state.isAssetDescription = true
     }
     cache.assetIndex = buildAssetIndex(cache.assets)
   },
 
-  [DELETE_ASSET_START] (state) {
-    state.deleteAsset = {
-      isLoading: true,
-      isError: false
-    }
-  },
-  [DELETE_ASSET_ERROR] (state) {
-    state.deleteAsset = {
-      isLoading: false,
-      isError: true
-    }
+  [CANCEL_ASSET] (state, asset) {
+    asset.canceled = true
   },
 
-  [CANCEL_ASSET] (state, shot) {
-    shot.canceled = true
-  },
-
-  [DELETE_ASSET_END] (state, assetToDelete) {
-    state.deleteAsset = {
-      isLoading: false,
-      isError: false
-    }
-  },
-
-  [RESTORE_ASSET_START] (state) {
-    state.restoreAsset = {
-      isLoading: true,
-      isError: false
-    }
-  },
-  [RESTORE_ASSET_ERROR] (state) {
-    state.restoreAsset = {
-      isLoading: false,
-      isError: true
-    }
-  },
   [RESTORE_ASSET_END] (state, assetToRestore) {
     const asset = state.assetMap[assetToRestore.id]
     asset.canceled = false
-    state.restoreAsset = {
-      isLoading: false,
-      isError: false
-    }
-    cache.assetIndex = buildAssetIndex(cache.assets)
-  },
-
-  [RESTORE_ASSET_START] (state) {
-    state.restoreAsset = {
-      isLoading: true,
-      isError: false
-    }
-  },
-  [RESTORE_ASSET_ERROR] (state) {
-    state.restoreAsset = {
-      isLoading: false,
-      isError: true
-    }
-  },
-  [RESTORE_ASSET_END] (state, assetToRestore) {
-    const asset = state.assetMap[assetToRestore.id]
-    asset.canceled = false
-    state.restoreAsset = {
-      isLoading: false,
-      isError: false
-    }
     cache.assetIndex = buildAssetIndex(cache.assets)
   },
 

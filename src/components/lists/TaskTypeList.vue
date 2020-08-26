@@ -30,21 +30,15 @@
           </th>
         </tr>
         <tr class="datatable-row tasktype-item" v-for="taskType in assetsItems" :key="taskType.id">
-          <task-type-name class="name" :entry="taskType" />
+          <task-type-cell class="name" :task-type="taskType" />
           <td class="priority">{{ taskType.priority }}</td>
           <td class="allow-timelog">
             {{ taskType.allow_timelog ? $t('main.yes') : $t('main.no')}}
           </td>
           <row-actions
             :taskType-id="taskType.id"
-            :edit-route="{
-              name: 'edit-task-type',
-              params: {task_type_id: taskType.id}
-            }"
-            :delete-route="{
-              name: 'delete-task-type',
-              params: {task_type_id: taskType.id}
-            }"
+            @delete-clicked="$emit('delete-clicked', taskType)"
+            @edit-clicked="$emit('edit-clicked', taskType)"
           />
         </tr>
       </draggable>
@@ -67,7 +61,7 @@
           class="datatable-row tasktype-item"
           v-for="taskType in shotsItems" :key="taskType.id"
         >
-          <task-type-name class="name" :entry="taskType" />
+          <task-type-cell class="name" :task-type="taskType" />
           <td class="priority">{{ taskType.priority }}</td>
           <td class="allow-timelog">
             {{ taskType.allow_timelog ? $t('main.yes') : $t('main.no')}}
@@ -105,7 +99,7 @@ import { mapGetters, mapActions } from 'vuex'
 import draggable from 'vuedraggable'
 import RowActions from '../widgets/RowActions'
 import TableInfo from '../widgets/TableInfo'
-import TaskTypeName from '../cells/TaskTypeName'
+import TaskTypeCell from '../cells/TaskTypeName'
 
 export default {
   name: 'task-type-list',
@@ -127,7 +121,7 @@ export default {
     draggable,
     RowActions,
     TableInfo,
-    TaskTypeName
+    TaskTypeCell
   },
 
   mounted () {},

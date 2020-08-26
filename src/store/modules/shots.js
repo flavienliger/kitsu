@@ -1,6 +1,5 @@
 import Vue from 'vue'
 import moment from 'moment'
-import breakdownApi from '../api/breakdown'
 import peopleApi from '../api/people'
 import shotsApi from '../api/shots'
 import tasksStore from './tasks'
@@ -33,6 +32,9 @@ import {
   frameToSeconds
 } from '../../lib/video'
 import {
+  minutesToDays
+} from '../../lib/time'
+import {
   buildShotIndex,
   buildSequenceIndex,
   buildEpisodeIndex,
@@ -54,63 +56,28 @@ import {
   LOAD_SEQUENCES_END,
 
   LOAD_SHOT_END,
-  LOAD_SHOT_CASTING_END,
 
   SHOT_CSV_FILE_SELECTED,
-  IMPORT_SHOTS_START,
   IMPORT_SHOTS_END,
 
   LOAD_OPEN_PRODUCTIONS_END,
 
-  NEW_SHOT_START,
-  NEW_SHOT_ERROR,
   NEW_SHOT_END,
-
-  NEW_SEQUENCE_START,
-  NEW_SEQUENCE_ERROR,
   NEW_SEQUENCE_END,
-
-  NEW_EPISODE_START,
-  NEW_EPISODE_ERROR,
   NEW_EPISODE_END,
-
-  EDIT_SHOT_START,
-  EDIT_SHOT_ERROR,
   EDIT_SHOT_END,
-
-  EDIT_SEQUENCE_START,
-  EDIT_SEQUENCE_ERROR,
   EDIT_SEQUENCE_END,
-
-  EDIT_EPISODE_START,
-  EDIT_EPISODE_ERROR,
   EDIT_EPISODE_END,
-
-  DELETE_SHOT_START,
-  DELETE_SHOT_ERROR,
-  DELETE_SHOT_END,
-
-  DELETE_SEQUENCE_START,
-  DELETE_SEQUENCE_ERROR,
-
-  DELETE_EPISODE_START,
-  DELETE_EPISODE_ERROR,
-
   ADD_EPISODE,
   UPDATE_EPISODE,
   REMOVE_EPISODE,
-
   ADD_SEQUENCE,
   UPDATE_SEQUENCE,
   REMOVE_SEQUENCE,
-
   ADD_SHOT,
   UPDATE_SHOT,
   REMOVE_SHOT,
   CANCEL_SHOT,
-
-  RESTORE_SHOT_START,
-  RESTORE_SHOT_ERROR,
   RESTORE_SHOT_END,
 
   NEW_TASK_COMMENT_END,
@@ -190,7 +157,7 @@ const helpers = {
     return date.toString().padStart(2, '0')
   },
 
-  populateTask (task, shot, production) {
+  populateTask (task, shot) {
     task.name = helpers.getTaskType(task.task_type_id).priority.toString()
     task.task_status_short_name =
       helpers.getTaskStatus(task.task_status_id).short_name
@@ -297,14 +264,15 @@ const helpers = {
 
     const query = shotSearch
     const keywords = getKeyWords(query) || []
-    const filters = getFilters(
-      cache.shotIndex,
+    const filters = getFilters({
+      entryIndex: cache.shotIndex,
+      assetTypes: [],
       taskTypes,
       taskStatuses,
-      production.descriptors,
+      descriptors: production.descriptors,
       persons,
       query
-    )
+    })
     let result = indexSearch(cache.shotIndex, keywords) || cache.shots
     result = applyFilters(result, filters, taskMap)
     result = sortShotResult(
@@ -347,6 +315,7 @@ const initialState = {
   episodeValidationColumns: [],
 
   isFps: false,
+  isFrames: false,
   isFrameIn: false,
   isFrameOut: false,
   isTime: false,
@@ -372,21 +341,6 @@ const initialState = {
   isShotsLoading: false,
   isShotsLoadingError: false,
   shotsCsvFormData: null,
-
-  editShot: {
-    isLoading: false,
-    isError: false
-  },
-
-  deleteShot: {
-    isLoading: false,
-    isError: false
-  },
-
-  restoreShot: {
-    isLoading: false,
-    isError: false
-  },
 
   shotListScrollPosition: 0,
   sequenceListScrollPosition: 0,
@@ -417,6 +371,7 @@ const getters = {
   shotSorting: state => state.shotSorting,
 
   isFps: state => state.isFps,
+  isFrames: state => state.isFrames,
   isFrameIn: state => state.isFrameIn,
   isFrameOut: state => state.isFrameOut,
   isTime: state => state.isTime,
@@ -444,10 +399,6 @@ const getters = {
 
   isShotsLoading: state => state.isShotsLoading,
   isShotsLoadingError: state => state.isShotsLoadingError,
-
-  editShot: state => state.editShot,
-  deleteShot: state => state.deleteShot,
-  restoreShot: state => state.restoreShot,
   shotCreated: state => state.shotCreated,
 
   shotsCsvFormData: state => state.shotsCsvFormData,
@@ -550,8 +501,13 @@ const actions = {
       commit(SET_CURRENT_EPISODE, episode.id)
     }
 
-    if (isTVShow && !episode) {
+    if (isTVShow && !episode && state.episodes.length === 0) {
       return callback()
+    }
+
+    if (isTVShow && !episode) {
+      episode = state.episodes.length > 0 ? state.episodes[0] : null
+      commit(SET_CURRENT_EPISODE, episode.id)
     }
 
     if (!isTVShow && episode) {
@@ -597,7 +553,7 @@ const actions = {
           commit(ADD_EPISODE, episode)
         }
       })
-      .catch((err) => console.error(err))
+      .catch(console.error)
   },
 
   loadSequence ({ commit, state }, sequenceId) {
@@ -609,7 +565,7 @@ const actions = {
           commit(ADD_SEQUENCE, sequence)
         }
       })
-      .catch((err) => console.error(err))
+      .catch(console.error)
   },
 
   loadShot ({ commit, state, rootGetters }, shotId) {
@@ -634,21 +590,9 @@ const actions = {
       .catch((err) => console.error(err))
   },
 
-  loadShotCasting ({ commit, rootGetters }, shot) {
-    const assetMap = rootGetters.assetMap
-    return breakdownApi.getShotCasting(shot)
-      .then((casting) => {
-        commit(LOAD_SHOT_CASTING_END, { shot, casting, assetMap })
-      })
-  },
-
-  newShot ({ commit, dispatch, rootGetters }, { shot, callback }) {
-    commit(NEW_SHOT_START)
-    shotsApi.newShot(shot, (err, shot) => {
-      if (err) {
-        commit(NEW_SHOT_ERROR)
-        if (callback) callback(err)
-      } else {
+  newShot ({ commit, dispatch, rootGetters }, shot) {
+    return shotsApi.newShot(shot)
+      .then((shot) => {
         commit(NEW_SHOT_END, shot)
         const taskTypeIds = state.shotValidationColumns
         const createTaskPromises = taskTypeIds.map(
@@ -659,88 +603,57 @@ const actions = {
             type: 'shots'
           })
         )
-
-        Promise.all(createTaskPromises).then(() => {
-          if (callback) callback(null, shot)
-        }).catch((err) => {
-          console.error(err)
-        })
-      }
-    })
-  },
-
-  newSequence ({ commit, state }, { sequence, callback }) {
-    commit(NEW_SEQUENCE_START)
-    shotsApi.newSequence(sequence, (err, sequence) => {
-      if (err) {
-        commit(NEW_SEQUENCE_ERROR)
-      } else {
-        commit(NEW_SEQUENCE_END, sequence)
-      }
-      if (callback) callback(err, sequence)
-    })
-  },
-
-  newEpisode ({ commit, state }, payload) {
-    commit(NEW_EPISODE_START)
-    shotsApi.newEpisode(payload.episode, (err, episode) => {
-      if (err) {
-        commit(NEW_EPISODE_ERROR)
-      } else {
-        commit(NEW_EPISODE_END, episode)
-      }
-      if (payload.callback) payload.callback(err, episode)
-    })
-  },
-
-  editShot ({ commit, state }, payload) {
-    commit(EDIT_SHOT_START)
-    shotsApi.updateShot(payload.data, (err, shot) => {
-      if (err) {
-        commit(EDIT_SHOT_ERROR)
-      } else {
-        commit(EDIT_SHOT_END, shot)
-      }
-      if (payload.callback) payload.callback(err)
-    })
-  },
-
-  editEpisode ({ commit, state }, episode) {
-    return new Promise((resolve, reject) => {
-      commit(EDIT_EPISODE_START)
-      shotsApi.updateEpisode(episode, (err, episode) => {
-        if (err) {
-          commit(EDIT_EPISODE_ERROR)
-          reject(err)
-        } else {
-          commit(EDIT_EPISODE_END, episode)
-          resolve(episode)
-        }
+        return Promise.all(createTaskPromises)
+          .then(() => {
+            return Promise.resolve(shot)
+          })
+          .catch(console.error)
       })
-    })
+  },
+
+  newSequence ({ commit, state }, sequence) {
+    return shotsApi.newSequence(sequence)
+      .then((sequence) => {
+        commit(NEW_SEQUENCE_END, sequence)
+        return Promise.resolve(sequence)
+      })
+  },
+
+  newEpisode ({ commit, state }, episode) {
+    return shotsApi.newEpisode(episode)
+      .then((episode) => {
+        commit(NEW_EPISODE_END, episode)
+        return Promise.resolve(episode)
+      })
+  },
+
+  editShot ({ commit, state }, data) {
+    return shotsApi.updateShot(data)
+      .then((shot) => {
+        commit(EDIT_SHOT_END, shot)
+        return Promise.resolve(shot)
+      })
+  },
+
+  editEpisode ({ commit, state }, data) {
+    return shotsApi.updateEpisode(data)
+      .then((episode) => {
+        commit(EDIT_EPISODE_END, episode)
+        return Promise.resolve(episode)
+      })
   },
 
   editSequence ({ commit, state }, data) {
-    return new Promise((resolve, reject) => {
-      commit(EDIT_SEQUENCE_START)
-      shotsApi.updateSequence(data, (err, sequence) => {
-        if (err) {
-          commit(EDIT_SEQUENCE_ERROR)
-          reject(err)
-        } else {
-          commit(EDIT_SEQUENCE_END, sequence)
-          resolve(sequence)
-        }
+    return shotsApi.updateSequence(data)
+      .then((sequence) => {
+        commit(EDIT_SEQUENCE_END, sequence)
+        return Promise.resolve(sequence)
       })
-    })
   },
 
-  deleteShot ({ commit, state }, { shot, callback }) {
-    commit(DELETE_SHOT_START)
-    shotsApi.deleteShot(shot, (err) => {
-      if (err) {
-        commit(DELETE_SHOT_ERROR)
-      } else {
+  deleteShot ({ commit, state }, shot) {
+    return shotsApi.deleteShot(shot)
+      .then(() => {
         const previousShot = state.shotMap[shot.id]
         if (
           previousShot &&
@@ -751,62 +664,40 @@ const actions = {
         } else {
           commit(REMOVE_SHOT, shot)
         }
-        commit(DELETE_SHOT_END, shot)
-      }
-      if (callback) callback(err)
-    })
+        return Promise.resolve()
+      })
   },
 
   deleteEpisode ({ commit, state }, episode) {
-    return new Promise((resolve, reject) => {
-      commit(DELETE_EPISODE_START)
-      shotsApi.deleteEpisode(episode, (err) => {
-        if (err) {
-          commit(DELETE_EPISODE_ERROR)
-          reject(err)
-        } else {
-          commit(REMOVE_EPISODE, episode)
-          resolve(episode)
-        }
+    return shotsApi.deleteEpisode(episode)
+      .then(() => {
+        commit(REMOVE_EPISODE, episode)
+        return Promise.resolve(episode)
       })
-    })
   },
 
   deleteSequence ({ commit, state }, sequence) {
-    return new Promise((resolve, reject) => {
-      commit(DELETE_SEQUENCE_START)
-      shotsApi.deleteSequence(sequence, (err) => {
-        if (err) {
-          commit(DELETE_SEQUENCE_ERROR)
-        } else {
-          commit(REMOVE_SEQUENCE, sequence)
-        }
-        if (err) reject(err)
-        else resolve(sequence)
+    return shotsApi.deleteSequence(sequence)
+      .then(() => {
+        commit(REMOVE_SEQUENCE, sequence)
+        return Promise.resolve(sequence)
       })
-    })
   },
 
-  restoreShot ({ commit, state }, payload) {
-    commit(RESTORE_SHOT_START)
-    const shot = payload.shot
-    shotsApi.restoreShot(shot, (err) => {
-      if (err) {
-        commit(RESTORE_SHOT_ERROR)
-      } else {
+  restoreShot ({ commit, state }, shot) {
+    return shotsApi.restoreShot(shot)
+      .then((shot) => {
         commit(RESTORE_SHOT_END, shot)
-      }
-      if (payload.callback) payload.callback(err)
-    })
+        return Promise.resolve(shot)
+      })
   },
 
   uploadShotFile ({ commit, state, rootGetters }, toUpdate) {
-    commit(IMPORT_SHOTS_START)
     const production = rootGetters.currentProduction
     return shotsApi.postCsv(production, state.shotsCsvFormData, toUpdate)
       .then(() => {
         commit(IMPORT_SHOTS_END)
-        Promise.resolve()
+        return Promise.resolve()
       })
   },
 
@@ -923,17 +814,12 @@ const actions = {
     return new Promise((resolve, reject) => {
       const productionId = rootState.route.params.production_id
       dispatch('setLastProductionScreen', 'sequences')
-
       if (state.sequences.length === 0 ||
           state.sequences[0].production_id !== productionId) {
-        dispatch('loadShots', (err) => {
-          if (err) {
-            reject(err)
-          } else {
-            dispatch('computeSequenceStats')
-            resolve()
-          }
-        })
+        dispatch('computeSequenceStats')
+        resolve()
+      } else {
+        resolve()
       }
     })
   },
@@ -1014,6 +900,7 @@ const actions = {
 
   getShotsCsvLines ({ state, rootGetters }) {
     const production = rootGetters.currentProduction
+    const organisation = rootGetters.organisation
     let shots = cache.shots
     if (cache.result && cache.result.length > 0) {
       shots = cache.result
@@ -1029,11 +916,13 @@ const actions = {
         .forEach((descriptor) => {
           shotLine.push(shot.data[descriptor.field_name])
         })
-      shotLine.push(shot.nb_frames)
+      if (state.isTime) {
+        shotLine.push(minutesToDays(organisation, shot.timeSpent).toFixed(2))
+      }
+      if (state.isFrames) shotLine.push(shot.nb_frames)
       if (state.isFrameIn) shotLine.push(shot.data.frame_in)
       if (state.isFrameOut) shotLine.push(shot.data.frame_out)
       if (state.isFps) shotLine.push(shot.data.fps)
-      if (state.isTime) shotLine.push(shot.timeSpent)
       state.shotValidationColumns
         .forEach((validationColumn) => {
           const task = rootGetters.taskMap[shot.validations[validationColumn]]
@@ -1192,6 +1081,7 @@ const mutations = {
   ) {
     const validationColumns = {}
     let isFps = false
+    let isFrames = false
     let isFrameIn = false
     let isFrameOut = false
     let isDescription = false
@@ -1232,6 +1122,7 @@ const mutations = {
       shot.timeSpent = timeSpent
 
       if (!isFps && shot.data.fps) isFps = true
+      if (!isFrames && shot.nb_frames) isFrames = true
       if (!isFrameIn && shot.data.frame_in) isFrameIn = true
       if (!isFrameOut && shot.data.frame_out) isFrameOut = true
       if (!isTime && shot.timeSpent > 0) isTime = true
@@ -1248,6 +1139,7 @@ const mutations = {
 
     state.nbValidationColumns = state.shotValidationColumns.length
     state.isFps = isFps
+    state.isFrames = isFrames
     state.isFrameIn = isFrameIn
     state.isFrameOut = isFrameOut
     state.isTime = isTime
@@ -1363,23 +1255,12 @@ const mutations = {
   [SHOT_CSV_FILE_SELECTED] (state, formData) {
     state.shotsCsvFormData = formData
   },
-  [IMPORT_SHOTS_START] (state) {},
   [IMPORT_SHOTS_END] (state) {
     state.shotsCsvFormData = null
   },
 
   [LOAD_OPEN_PRODUCTIONS_END] (state, projects) {
     state.openProductions = projects
-  },
-
-  [EDIT_SHOT_START] (state, data) {
-    state.editShot.isLoading = true
-    state.editShot.isError = false
-  },
-
-  [EDIT_SHOT_ERROR] (state) {
-    state.editShot.isLoading = false
-    state.editShot.isError = true
   },
 
   [EDIT_SHOT_END] (state, newShot) {
@@ -1414,6 +1295,7 @@ const mutations = {
     }
 
     if (newShot.data.fps) state.isFps = true
+    if (newShot.nb_frames) state.isFrames = true
     if (newShot.data.frame_in) state.isFrameIn = true
     if (newShot.data.frame_out) state.isFrameOut = true
     if (shot.description && !state.isShotDescription) {
@@ -1421,8 +1303,6 @@ const mutations = {
     }
   },
 
-  [EDIT_SEQUENCE_START] (state, data) {},
-  [EDIT_SEQUENCE_ERROR] (state) {},
   [EDIT_SEQUENCE_END] (state, newSequence) {
     const sequence = state.sequenceMap[newSequence.id]
     if (sequence) {
@@ -1431,8 +1311,6 @@ const mutations = {
     state.sequenceIndex = buildSequenceIndex(state.sequences)
   },
 
-  [EDIT_EPISODE_START] (state, data) {},
-  [EDIT_EPISODE_ERROR] (state) {},
   [EDIT_EPISODE_END] (state, newEpisode) {
     const episode = state.episodeMap[newEpisode.id]
     if (episode) {
@@ -1441,51 +1319,9 @@ const mutations = {
     state.episodeIndex = buildEpisodeIndex(state.episodes)
   },
 
-  [DELETE_SHOT_START] (state) {
-    state.deleteShot = {
-      isLoading: true,
-      isError: false
-    }
-  },
-  [DELETE_SHOT_ERROR] (state) {
-    state.deleteShot = {
-      isLoading: false,
-      isError: true
-    }
-  },
-
-  [DELETE_SHOT_END] (state, shotToDelete) {
-    state.deleteShot = {
-      isLoading: false,
-      isError: false
-    }
-  },
-
-  [DELETE_SEQUENCE_START] (state) {},
-  [DELETE_SEQUENCE_ERROR] (state) {},
-
-  [DELETE_EPISODE_START] (state) {},
-  [DELETE_EPISODE_ERROR] (state) {},
-
-  [RESTORE_SHOT_START] (state) {
-    state.restoreShot = {
-      isLoading: true,
-      isError: false
-    }
-  },
-  [RESTORE_SHOT_ERROR] (state) {
-    state.restoreShot = {
-      isLoading: false,
-      isError: true
-    }
-  },
   [RESTORE_SHOT_END] (state, shotToRestore) {
     const shot = state.shotMap[shotToRestore.id]
     shot.canceled = false
-    state.restoreShot = {
-      isLoading: false,
-      isError: false
-    }
     cache.shotIndex = buildShotIndex(cache.shots)
   },
 
@@ -1502,14 +1338,16 @@ const mutations = {
     const result =
       indexSearch(state.sequenceIndex, keywords) || state.sequences
 
-    state.searchSequenceFilters = getFilters(
-      cache.shotIndex,
-      [],
-      [],
-      production.descriptors.filter(d => d.entity_type === 'Shot'),
-      [],
-      sequenceSearch
-    )
+    state.searchSequenceFilters = getFilters({
+      entryIndex: cache.shotIndex,
+      assetTypes: [],
+      taskTypes: [],
+      taskStatuses: [],
+      descriptors:
+        production.descriptors.filter(d => d.entity_type === 'Shot'),
+      persons: [],
+      query: sequenceSearch
+    })
     state.displayedSequences = result.slice(0, PAGE_SIZE * 2)
     state.displayedSequencesLength = result.length
     state.sequenceSearchText = sequenceSearch
@@ -1525,8 +1363,6 @@ const mutations = {
     state.episodeSearchText = episodeSearch
   },
 
-  [NEW_SHOT_START] (state) {},
-  [NEW_SHOT_ERROR] (state) {},
   [NEW_SHOT_END] (state, shot) {
     const sequence = state.sequenceMap[shot.parent_id]
     const episode = state.episodeMap[sequence.parent_id]
@@ -1554,12 +1390,11 @@ const mutations = {
     state.shotSelectionGrid = buildSelectionGrid(maxX, maxY)
 
     if (shot.data.fps) state.isFps = true
+    if (shot.nb_frames) state.isFrames = true
     if (shot.data.frame_in) state.isFrameIn = true
     if (shot.data.frame_out) state.isFrameOut = true
   },
 
-  [NEW_SEQUENCE_START] (state) {},
-  [NEW_SEQUENCE_ERROR] (state) {},
   [NEW_SEQUENCE_END] (state, sequence) {
     if (sequence.parent_id) {
       const episode = state.episodeMap[sequence.parent_id]
@@ -1572,8 +1407,6 @@ const mutations = {
     state.sequenceIndex = buildSequenceIndex(state.sequences)
   },
 
-  [NEW_EPISODE_START] (state) {},
-  [NEW_EPISODE_ERROR] (state) {},
   [NEW_EPISODE_END] (state, episode) {
     state.episodes.push(episode)
     state.episodes = sortByName(state.episodes)
@@ -1586,10 +1419,12 @@ const mutations = {
       if (task) {
         const shot = state.shotMap[task.entity_id]
         if (shot) {
+          helpers.populateTask(task, shot)
           const validations = { ...shot.validations }
           Vue.set(validations, task.task_type_id, task.id)
           delete shot.validations
           Vue.set(shot, 'validations', validations)
+          shot.tasks.push(task.id)
         }
       }
     })
@@ -1724,20 +1559,6 @@ const mutations = {
     }
   },
 
-  [CREATE_TASKS_END] (state, tasks) {
-    tasks.forEach((task) => {
-      if (task) {
-        const shot = state.shotMap[task.entity_id]
-        if (shot) {
-          const validations = { ...shot.validations }
-          Vue.set(validations, task.task_type_id, task.id)
-          delete shot.validations
-          Vue.set(shot, 'validations', validations)
-        }
-      }
-    })
-  },
-
   [ADD_SELECTED_TASKS] (state, selection) {
     const tmpGrid = JSON.parse(JSON.stringify(state.shotSelectionGrid))
     selection.forEach((validationInfo) => {
@@ -1780,6 +1601,7 @@ const mutations = {
     let shots = cache.shots
     if (state.searchSequenceFilters.length > 0) {
       shots = applyFilters(cache.shots, state.searchSequenceFilters, {})
+      shots = shots.filter(shot => !shot.canceled)
     }
     state.sequenceStats = computeStats(
       shots,

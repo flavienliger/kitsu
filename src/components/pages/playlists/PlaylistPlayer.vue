@@ -44,8 +44,8 @@
     v-show="!isAddingEntity || isLoading"
   >
     <raw-video-player
-      class="raw-player"
       ref="raw-player"
+      class="raw-player"
       :entities="entityList"
       :is-repeating="isRepeating"
       @repeat="onVideoRepeated"
@@ -58,9 +58,9 @@
     <raw-video-player
       ref="raw-player-comparison"
       class="raw-player"
+      :entities="entityListToCompare"
       :is-repeating="isRepeating"
       :muted="true"
-      :entities="entityListToCompare"
       name="comparison"
       v-show="isComparing && isMovieComparison && !isLoading"
     />
@@ -109,7 +109,11 @@
       <spinner />
     </div>
 
-    <div class="canvas-wrapper" ref="canvas-wrapper">
+    <div
+      class="canvas-wrapper"
+      ref="canvas-wrapper"
+      v-show="!isCurrentEntityFile"
+    >
       <canvas
         id="playlist-annotation-canvas"
         ref="annotation-canvas"
@@ -132,10 +136,7 @@
   <div
     class="playlist-progress"
     ref="playlist-progress"
-    v-show="!isAddingEntity"
-    :style="{
-      display: isCurrentEntityMovie ? 'flex' : 'none'
-    }"
+    v-show="isCurrentEntityMovie && !isAddingEntity"
   >
     <div class="video-progress">
       <progress
@@ -158,10 +159,7 @@
     :annotations="annotations"
     :max-duration-raw="maxDurationRaw"
     @select-annotation="loadAnnotation"
-    :style="{
-      display: isCurrentEntityMovie ? 'flex' : 'none'
-    }"
-    v-if="playlist.id && !isAddingEntity"
+    v-show="isCurrentEntityMovie && playlist.id && !isAddingEntity"
   />
 
   <div
@@ -238,6 +236,28 @@
         icon="pause"
         v-else
       />
+      <button-simple
+        class="button playlist-button flexrow-item"
+        @click="onSpeedClicked"
+        :title="$t('playlists.actions.speed')"
+        text="x1.00"
+        v-if="speed === 3"
+      />
+      <button-simple
+        class="button playlist-button flexrow-item"
+        @click="onSpeedClicked"
+        :title="$t('playlists.actions.speed')"
+        text="x0.50"
+        v-else-if="speed === 2"
+      />
+      <button-simple
+        class="button playlist-button flexrow-item"
+        @click="onSpeedClicked"
+        :title="$t('playlists.actions.speed')"
+        text="x0.25"
+        v-else
+      />
+
       <button
         :class="{
           button: true,
@@ -324,10 +344,21 @@
 
     <span class="filler"></span>
 
+    <button-simple
+      @click="$emit('save-clicked')"
+      class="playlist-button flexrow-item"
+      :title="$t('playlists.actions.save_playlist')"
+      icon="save"
+      v-if="isCurrentUserManager && tempMode"
+    />
     <div
       class="flexrow"
       v-if="!isCurrentUserCGArtist && (isCurrentEntityMovie || isCurrentEntityPicture)"
     >
+      <div
+        class="separator"
+        v-if="isCurrentUserManager && tempMode"
+      ></div>
       <button-simple
         class="playlist-button flexrow-item"
         icon="undo"
@@ -648,42 +679,40 @@ export default {
       currentEntityPictureIndex: 0,
       currentTime: '00:00.000',
       currentTimeRaw: 0,
+      entityList: [],
+      entityListToCompare: [],
       fabricCanvas: null,
       isDlButtonsHidden: true,
       isCommentsHidden: true,
       isComparing: false,
       isDrawing: false,
-      isTyping: false,
+      isEntitiesHidden: false,
       isPlaying: false,
       isRepeating: false,
       isShowingPalette: false,
       isShowingPencilPalette: false,
-      isEntitiesHidden: false,
+      isTyping: false,
       maxDuration: '00:00.000',
       maxDurationRaw: 0,
       palette: ['#ff3860', '#008732', '#5E60BA', '#f57f17'],
       pencil: 'big',
       pencilPalette: ['big', 'medium', 'small'],
+      playlistToEdit: {},
       playingEntityIndex: 0,
-      entityList: [],
-      entityListToCompare: [],
+      speed: 3,
       task: null,
       taskTypeOptions: [],
       taskTypeToCompare: null,
       textColor: '#ff3860',
       modals: {
-        edit: false,
         delete: false,
         taskType: false
       },
       loading: {
-        playlists: false,
-        editPlaylist: false,
         deletePlaylist: false
       },
       errors: {
         playlists: false,
-        editPlaylist: false,
         deletePlaylist: false
       },
       forClientOptions: [
@@ -708,6 +737,7 @@ export default {
       if (!this.$el.nomousemove) this.$el.onmousemove = this.onMouseMove
       this.setupFabricCanvas()
       this.resetCanvas()
+      this.setPlayerSpeed(1)
     })
   },
 
@@ -721,10 +751,12 @@ export default {
   computed: {
     ...mapGetters([
       'assetTaskTypes',
+      'currentEpisode',
       'currentProduction',
       'isCurrentUserCGArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
+      'isTVShow',
       'taskMap',
       'taskTypeMap',
       'shotTaskTypes',
@@ -948,7 +980,6 @@ export default {
     ...mapActions([
       'changePlaylistType',
       'deletePlaylist',
-      'editPlaylist',
       'removeBuildJob',
       'runPlaylistBuild'
     ]),
@@ -985,17 +1016,16 @@ export default {
     displayBars () {
       if (this.$refs['button-bar']) {
         if (this.$refs.header) {
-          this.$refs.header.style.display = 'flex'
           this.$refs.header.style.opacity = 1
         }
         if (this.$refs['button-bar']) {
-          this.$refs['button-bar'].style.display = 'flex'
           this.$refs['button-bar'].style.opacity = 1
         }
         if (this.$refs['playlist-progress']) {
-          this.$refs['playlist-progress'].style.display =
-            this.isCurrentEntityMovie ? 'flex' : 'none'
           this.$refs['playlist-progress'].style.opacity = 1
+        }
+        if (this.$refs['playlist-annotation']) {
+          this.$refs['playlist-annotation'].$el.style.opacity = 1
         }
         this.container.style.cursor = 'default'
       }
@@ -1005,12 +1035,7 @@ export default {
       this.$refs.header.style.opacity = 0
       this.$refs['button-bar'].style.opacity = 0
       this.$refs['playlist-progress'].style.opacity = 0
-      setTimeout(() => {
-        this.$refs.header.style.display = 'none'
-        this.$refs['button-bar'].style.display = 'none'
-        this.$refs['playlist-progress'].style.display = 'none'
-        this.container.style.cursor = 'none'
-      }, 500)
+      this.$refs['playlist-annotation'].$el.style.opacity = 0
     },
 
     showDeleteModal () {
@@ -1379,6 +1404,19 @@ export default {
       } else {
         this.play()
       }
+    },
+
+    onSpeedClicked () {
+      this.speed = this.speed + 1 > 3 ? 1 : this.speed + 1
+      let rate = 1
+      if (this.speed === 2) rate = 0.5
+      if (this.speed === 1) rate = 0.25
+      this.setPlayerSpeed(rate)
+    },
+
+    setPlayerSpeed (rate) {
+      this.rawPlayer.setSpeed(rate)
+      this.rawPlayerComparison.setSpeed(rate)
     },
 
     onTimeUpdate () {

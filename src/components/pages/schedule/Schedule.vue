@@ -16,7 +16,7 @@
         class="has-text-right total-man-days mr0"
       >
         <span class="total-value">
-          {{ totalManDays }} {{ $t('schedule.md') }}
+          {{ formatDuration(totalManDays) }} {{ $t('schedule.md') }}
         </span>
       </div>
 
@@ -76,12 +76,16 @@
             {{ rootElement.name }}
           </router-link>
           <input
-            class="flexrow-item"
+            class="flexrow-item mr1"
             type="number"
+            step="any"
             placeholder="0"
-            @input="$emit('item-changed', rootElement)"
+            @input="$emit('estimation-changed', {
+              days: $event.target.value,
+              item: rootElement
+            })"
             v-if="!rootElement.avatar && rootElement.editable"
-            v-model="rootElement.man_days"
+            :value="formatDuration(rootElement.man_days)"
           />
           <span
             class="man-days-unit flexrow-item"
@@ -93,7 +97,7 @@
             class="man-days-unit flexrow-item"
             v-if="rootElement.avatar || !rootElement.editable"
           >
-            {{ rootElement.man_days }}
+            {{ formatDuration(rootElement.man_days) }}
             {{ $t('schedule.md') }}
           </span>
 
@@ -118,7 +122,14 @@
               class="entity-line entity-name child-line flexrow"
               :style="childNameStyle(rootElement, j)"
             >
-              <span class="filler flexrow-item">
+              <router-link
+                :to="childElement.route"
+                class="filler flexrow-item root-element-name"
+                v-if="childElement.route"
+              >
+                {{ childElement.name }}
+              </router-link>
+              <span class="filler flexrow-item" v-else>
                 {{ childElement.name }}
               </span>
               <span class="flexrow-item"
@@ -126,9 +137,12 @@
               >
                 <input
                   class="man-days-unit flexrow-item"
+                  type="number"
+                  min="0"
                   placeholder="0"
+                  step="any"
                   @input="onChildEstimationChanged($event, childElement, rootElement)"
-                  v-model="childElement.man_days"
+                  :value="formatDuration(childElement.man_days)"
                 />
                 {{ $t('schedule.md') }}
               </span>
@@ -154,7 +168,7 @@
       >
         <div
           class="day"
-          :key="'header-' + day.text"
+          :key="'header-' + day.text + '-' + index"
           :style="dayStyle(day)"
           v-for="(day, index) in daysAvailable"
         >
@@ -261,10 +275,11 @@
               <div
                 class="timebar"
                 :style="timebarStyle(rootElement)"
+                v-show="isVisible(rootElement)"
               >
                 <div
                   :class="{
-                    'timebar-left-hand': rootElement.editable
+                    'timebar-left-hand': rootElement.editable && isCurrentUserManager
                   }"
                   @mousedown="moveTimebarLeftSide(rootElement, $event)"
                 >
@@ -276,7 +291,7 @@
                 </div>
                 <div
                   :class="{
-                    'timebar-right-hand': rootElement.editable
+                    'timebar-right-hand': rootElement.editable && isCurrentUserManager
                   }"
                   @mousedown="moveTimebarRightSide(rootElement, $event)"
                 >
@@ -305,10 +320,11 @@
                   class="timebar"
                   :title="childElement.name + ' (' + childElement.startDate.format('DD-MM') + ' - ' + childElement.endDate.format('DD-MM') + ')'"
                   :style="timebarChildStyle(childElement, rootElement, true)"
+                  v-show="isVisible(childElement)"
                 >
                   <div
                     :class="{
-                      'timebar-left-hand': childElement.editable && !childElement.unresizable
+                      'timebar-left-hand': childElement.editable && !childElement.unresizable && isCurrentUserManager
                     }"
                     @mousedown="moveTimebarLeftSide(childElement, $event)"
                   >
@@ -320,7 +336,7 @@
                   </div>
                   <div
                     :class="{
-                      'timebar-right-hand': childElement.editable && !childElement.unresizable
+                      'timebar-right-hand': childElement.editable && !childElement.unresizable && isCurrentUserManager
                     }"
                     @mousedown="moveTimebarRightSide(childElement, $event)"
                   >
@@ -355,8 +371,13 @@
 import { mapGetters, mapActions } from 'vuex'
 import moment from 'moment-timezone'
 
+import { formatListMixin } from '../../lists/format_mixin'
 import colors from '../../../lib/colors'
-import { addBusinessDays } from '../../../lib/time'
+import {
+  addBusinessDays,
+  daysToMinutes,
+  parseDate
+} from '../../../lib/time'
 
 import { ChevronRightIcon, ChevronDownIcon } from 'vue-feather-icons'
 import EditMilestoneModal from '../../modals/EditMilestoneModal'
@@ -366,6 +387,7 @@ import Spinner from '../../widgets/Spinner'
 
 export default {
   name: 'schedule',
+  mixins: [formatListMixin],
   components: {
     ChevronDownIcon,
     ChevronRightIcon,
@@ -422,6 +444,10 @@ export default {
       type: Object,
       required: true
     },
+    isEstimationLinked: {
+      type: Boolean,
+      default: false
+    },
     zoomLevel: {
       type: Number,
       default: 2
@@ -444,6 +470,8 @@ export default {
 
   computed: {
     ...mapGetters([
+      'isCurrentUserManager',
+      'organisation',
       'milestones'
     ]),
 
@@ -453,14 +481,11 @@ export default {
 
     daysAvailable () {
       const days = []
-      const startDate = moment.tz(
-        this.startDate.format('YYYY-MM-DD'),
-        'YYYY-MM-DD',
-        'UTC'
-      )
+      const startDate = parseDate(this.startDate.format('YYYY-MM-DD'))
       const day = startDate.clone().add(-1, 'days')
       let dayDate = day.toDate()
-      const endDayDate = this.endDate.toDate()
+      const endDate = parseDate(this.endDate.format('YYYY-MM-DD'))
+      const endDayDate = endDate.toDate()
       dayDate.isoweekday = day.isoWeekday()
       dayDate.monthday = day.month()
 
@@ -480,7 +505,7 @@ export default {
         }
         if ([6, 7].includes(nextDay.isoweekday)) nextDay.weekend = true
 
-        const momentDay = moment.tz(nextDay, 'YYYY-MM-DD', 'UTC')
+        const momentDay = parseDate(moment(nextDay).format('YYYY-MM-DD'))
         momentDay.newWeek = nextDay.newWeek
         momentDay.newMonth = nextDay.newMonth
         momentDay.weekend = nextDay.weekend
@@ -581,15 +606,26 @@ export default {
 
     timelineTodayPositionStyle () {
       const today = moment()
+      const isVisible =
+        today.isAfter(this.startDate) && today.isBefore(this.endDate)
       return {
         width: `${this.cellWidth}px`,
-        left: `${this.getTimebarLeft({ startDate: today }) - 5}px`
+        left: `${this.getTimebarLeft({ startDate: today }) - 5}px`,
+        display: isVisible ? 'block' : 'none'
       }
     },
 
     milestoneTooltipStyle () {
       // arbitrary calculus
       return { left: (-40 - 10 * (3 - this.zoomLevel)) + 'px' }
+    },
+
+    dayBeforeStartDate () {
+      return this.startDate.clone().add(-1, 'days')
+    },
+
+    dayAfterEndDate () {
+      return this.endDate.clone().add(1, 'days')
     }
   },
 
@@ -598,6 +634,14 @@ export default {
       'deleteMilestone',
       'saveMilestone'
     ]),
+
+    isVisible (timeElement) {
+      const isStartDateOk =
+        timeElement.startDate.isSameOrAfter(this.startDate)
+      const isEndDateOk =
+        timeElement.endDate.isSameOrBefore(this.dayAfterEndDate)
+      return isStartDateOk && isEndDateOk
+    },
 
     resetScheduleSize () {
       if (this.height) this.schedule.style.height = `${this.height}px`
@@ -627,26 +671,31 @@ export default {
     },
 
     onChildEstimationChanged (event, childElement, rootElement) {
-      const estimation = parseInt(event.target.value)
-      childElement.man_days = estimation
-      rootElement.man_days = rootElement.children.reduce((acc, child) => {
-        let value = acc
-        let manDays = child.man_days
-        if (child.man_days) {
-          if (typeof manDays === 'string') manDays = parseInt(manDays)
-          value = acc + manDays
-        }
-        return value
-      }, 0)
-
-      if (estimation > 0) {
-        childElement.endDate = addBusinessDays(
-          childElement.startDate, estimation
+      const estimation = event.target.value
+      if (this.isEstimationLinked) {
+        childElement.man_days = daysToMinutes(
+          this.organisation,
+          estimation
         )
+        rootElement.man_days = rootElement.children.reduce((acc, child) => {
+          let value = acc
+          const manDays = child.man_days
+          if (child.man_days) {
+            value = acc + manDays
+          }
+          return value
+        }, 0)
+
+        if (estimation > 0) {
+          childElement.endDate = addBusinessDays(
+            childElement.startDate, estimation
+          )
+        }
       }
       this.$emit('estimation-changed', {
         taskId: childElement.id,
-        days: estimation
+        days: estimation,
+        item: childElement
       })
     },
 
@@ -662,7 +711,7 @@ export default {
         startDate &&
         endDate &&
         startDate.isSameOrAfter(this.startDate.clone().add(-1, 'hour')) &&
-        endDate.isSameOrBefore(this.endDate) &&
+        endDate.isSameOrBefore(this.endDate.clone().add(1, 'day')) &&
         startDate.isSameOrBefore(endDate) &&
         endDate.isSameOrAfter(startDate)
       )
@@ -701,7 +750,10 @@ export default {
       currentIndex += dayChange
       if (currentIndex < 0) currentIndex = 0
 
-      const newStartDate = this.displayedDays[currentIndex]
+      let newStartDate = this.displayedDays[currentIndex]
+      if (!newStartDate) newStartDate = this.displayedDays[currentIndex - 1]
+      if (!newStartDate) newStartDate = this.displayedDays[currentIndex - 2]
+
       if (newStartDate) {
         const newEndDate = this.displayedDays[currentIndex + length]
         if (this.isValidItemDates(newStartDate, newEndDate)) {
@@ -770,7 +822,8 @@ export default {
       if (
         !this.isChangeStartDate &&
         !this.isChangeEndDate &&
-        timeElement.editable
+        timeElement.editable &&
+        this.isCurrentUserManager
       ) {
         this.isChangeDates = true
         this.isChangeStartDate = false
@@ -787,7 +840,8 @@ export default {
       if (
         !this.isChangeDates &&
         !this.isChangeEndDate &&
-        timeElement.editable
+        timeElement.editable &&
+        this.isCurrentUserManager
       ) {
         this.isChangeDates = false
         this.isChangeStartDate = true
@@ -807,7 +861,8 @@ export default {
       if (
         !this.isChangeDates &&
         !this.isChangeStartDate &&
-        timeElement.editable
+        timeElement.editable &&
+        this.isCurrentUserManager
       ) {
         this.isChangeDates = false
         this.isChangeStartDate = false
@@ -891,6 +946,7 @@ export default {
     // Helpers
 
     businessDiff (startDate, endDate) {
+      if (startDate.isSame(endDate)) return 0
       const first = startDate.clone().endOf('isoweek')
       const last = endDate.clone().startOf('isoweek')
       const diff = last.diff(first, 'days')
@@ -967,15 +1023,19 @@ export default {
     },
 
     getTimebarWidth (timeElement) {
-      const startDate =
-        timeElement.startDate || this.startDate
-      const endDate =
+      const startDate = timeElement.startDate || this.startDate
+      let endDate =
         timeElement.endDate ||
         (
           timeElement.startDate &&
           timeElement.startDate.clone().add(1, 'days')
         ) ||
         this.startDate.clone().add(1, 'days')
+
+      if (timeElement.man_days > 0 && !timeElement.end_date && !timeElement.endDate) {
+        const days = Math.ceil(timeElement.man_days)
+        endDate = addBusinessDays(startDate, days - 1)
+      }
       const lengthDiff = this.businessDiff(startDate, endDate)
       if (lengthDiff > 0) {
         return (lengthDiff + 1) * this.cellWidth - 10
@@ -1012,7 +1072,7 @@ export default {
     showEditMilestoneModal (day, milestone) {
       this.modals.edit = true
       if (milestone) {
-        milestone.date = moment(milestone.date, 'YYYY-MM-DD', 'en')
+        milestone.date = parseDate(milestone.date)
         this.milestoneToEdit = milestone
       } else {
         this.milestoneToEdit = { date: day }
@@ -1052,15 +1112,17 @@ export default {
     },
 
     milestoneLineStyle (milestone) {
-      const startDate = moment(
-        this.startDate.format('YYYY-MM-DD'),
-        'YYYY-MM-DD',
-        'UTC'
-      )
-      const endDate = moment(milestone.date, 'YYYY-MM-DD', 'UTC')
-      const lengthDiff = this.businessDiff(startDate, endDate)
-      return {
-        left: (lengthDiff + 0.5) * this.cellWidth + 'px'
+      const startDate = parseDate(this.startDate.format('YYYY-MM-DD'))
+      const endDate = parseDate(milestone.date)
+      if (startDate.isSameOrBefore(endDate)) {
+        const lengthDiff = this.businessDiff(startDate, endDate)
+        return {
+          left: (lengthDiff + 0.5) * this.cellWidth + 'px'
+        }
+      } else {
+        return {
+          display: 'none'
+        }
       }
     },
 
@@ -1233,6 +1295,10 @@ export default {
 
   .flexrow-item {
     margin: 0;
+
+    &.mr1 {
+      margin-right: 0.5em;
+    }
   }
 
   .expand {
@@ -1605,5 +1671,15 @@ export default {
       display: none;
     }
   }
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
 }
 </style>

@@ -135,7 +135,9 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'
 import { remove } from '../../lib/models'
+import colors from '@/lib/colors'
 
 import AtTa from 'vue-at/dist/vue-at-textarea'
 import AddCommentImageModal from '../modals/AddCommentImageModal'
@@ -221,14 +223,20 @@ export default {
       'drag', 'dragstart', 'dragend', 'dragover',
       'dragenter', 'dragleave', 'drop'
     ].forEach((evt) => {
-      this.$refs.wrapper.addEventListener(evt, (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-      })
+      if (this.$refs.wrapper) {
+        this.$refs.wrapper.addEventListener(evt, (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        })
+      }
     })
   },
 
   computed: {
+    ...mapGetters([
+      'isDarkTheme'
+    ]),
+
     isFileAttached () {
       return (
         this.attachedFileName !== undefined &&
@@ -240,7 +248,12 @@ export default {
       const status = this.taskStatus.find(t => t.id === this.task_status_id) ||
         this.taskStatus[0]
       if (status.short_name === 'todo') return '#666'
-      return status.color
+      const color = status.color
+      if (this.isDarkTheme) {
+        return colors.darkenColor(color)
+      } else {
+        return color
+      }
     },
 
     isAddChecklistAllowed () {

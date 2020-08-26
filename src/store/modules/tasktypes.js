@@ -53,24 +53,26 @@ const getters = {
     return state.taskTypeMap[rootState.route.params.task_type_id] || {}
   },
 
-  assetTaskTypes: state => state.taskTypes
-    .filter((taskType) => !taskType.for_shots),
+  assetTaskTypes: (state, getters, rootState, rootGetters) => {
+    return rootGetters.productionTaskTypes
+      .filter((taskType) => !taskType.for_shots)
+  },
 
-  shotTaskTypes: state => state.taskTypes
-    .filter((taskType) => taskType.for_shots),
+  shotTaskTypes: (state, getters, rootState, rootGetters) => {
+    return rootGetters.productionTaskTypes
+      .filter((taskType) => taskType.for_shots)
+  },
 
   getTaskTypeOptions: state => state.taskTypes.map(
     (type) => { return { label: type.name, value: type.id } }
   ),
 
-  getAssetTaskTypeOptions: state => state.taskTypes
-    .filter((taskType) => !taskType.for_shots)
+  getAssetTaskTypeOptions: (state, getters) => getters.assetTaskTypes
     .map(
       (type) => { return { label: type.name, value: type.id } }
     ),
 
-  getShotTaskTypeOptions: state => state.taskTypes
-    .filter((taskType) => taskType.for_shots)
+  getShotTaskTypeOptions: (state, getters) => getters.shotTaskTypes
     .map(
       (type) => { return { label: type.name, value: type.id } }
     ),
@@ -109,40 +111,28 @@ const actions = {
 
   newTaskType ({ commit, state }, data) {
     commit(EDIT_TASK_TYPE_START, data)
-    taskTypesApi.newTaskType(data)
+    return taskTypesApi.newTaskType(data)
       .then((taskType) => {
         commit(EDIT_TASK_TYPE_END, taskType)
         Promise.resolve(taskType)
-      })
-      .catch((err) => {
-        console.error(err)
-        commit(EDIT_TASK_TYPE_ERROR)
       })
   },
 
   editTaskType ({ commit, state }, data) {
     commit(EDIT_TASK_TYPE_START)
-    taskTypesApi.updateTaskType(data)
+    return taskTypesApi.updateTaskType(data)
       .then((taskType) => {
         commit(EDIT_TASK_TYPE_END, taskType)
         Promise.resolve(taskType)
-      })
-      .catch((err) => {
-        console.error(err)
-        commit(EDIT_TASK_TYPE_ERROR)
       })
   },
 
   deleteTaskType ({ commit, state }, taskType) {
     commit(DELETE_TASK_TYPE_START)
-    taskTypesApi.deleteTaskType(taskType)
+    return taskTypesApi.deleteTaskType(taskType)
       .then(() => {
         commit(DELETE_TASK_TYPE_END, taskType)
-        Promise.resolve()
-      })
-      .catch((err) => {
-        console.error(err)
-        commit(DELETE_TASK_TYPE_ERROR)
+        Promise.resolve(taskType)
       })
   },
 

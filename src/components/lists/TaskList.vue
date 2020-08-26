@@ -68,8 +68,9 @@
           @click="selectTask($event, index, task)"
           v-for="(task, index) in displayedTasks"
         >
-          <td class="thumbnail">
+          <td class="thumbnail flexrow">
             <entity-thumbnail
+              class="flexrow-item"
               :entity="getEntity(task.entity.id)"
               :width="50"
               :height="33"
@@ -115,10 +116,10 @@
               :ref="task.id + '-estimation'"
               class="input"
               @change="updateEstimation($event.target.value)"
-              :value="formatEstimation(task.estimation)"
+              :value="formatDuration(task.estimation)"
             />
             <span v-else>
-              {{ formatEstimation(task.estimation) }}
+              {{ formatDuration(task.estimation) }}
             </span>
           </td>
           <td :class="{
@@ -345,10 +346,6 @@ export default {
       return date ? moment(date, 'YYYY-MM-DD').toDate() : null
     },
 
-    formatEstimation (estimation) {
-      return estimation ? this.formatDuration(estimation) : 0
-    },
-
     updateEstimation (days) {
       const estimation = daysToMinutes(this.organisation, days)
       this.updateTasksEstimation({ estimation })
@@ -509,6 +506,8 @@ export default {
         this.$t('tasks.fields.estimation'),
         this.$t('tasks.fields.duration'),
         this.$t('tasks.fields.retake_count'),
+        this.$t('tasks.fields.start_date'),
+        this.$t('tasks.fields.due_date'),
         this.$t('tasks.fields.real_start_date'),
         this.$t('tasks.fields.real_end_date'),
         this.$t('tasks.fields.last_comment_date')
@@ -531,6 +530,8 @@ export default {
           this.formatDuration(task.estimation),
           this.formatDuration(task.duration),
           task.retake_count,
+          this.formatDate(task.start_date),
+          this.formatDate(task.due_date),
           this.formatDate(task.real_start_date),
           this.formatDate(task.end_date),
           this.formatDate(task.last_comment_date)
@@ -694,7 +695,7 @@ td.retake-count {
     padding: 0;
 
     &.thumbnail {
-      padding-left: 0.4em;
+      padding: 6px;
     }
   }
 

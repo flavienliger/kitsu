@@ -95,22 +95,26 @@ const actions = {
     return playlistsApi.getEntityPreviewFiles(entity)
   },
 
-  newPlaylist ({ commit }, { data, callback }) {
+  newPlaylist ({ commit }, data) {
     commit(EDIT_PLAYLIST_START, data)
-    playlistsApi.newPlaylist(data, (err, playlist) => {
-      if (err) commit(EDIT_PLAYLIST_ERROR)
-      else commit(EDIT_PLAYLIST_END, playlist)
-      if (callback) callback(err, playlist)
-    })
+    return playlistsApi.newPlaylist(data)
+      .then((playlist) => {
+        commit(EDIT_PLAYLIST_END, playlist)
+        return Promise.resolve(playlist)
+      })
   },
 
-  editPlaylist ({ commit }, { data, callback }) {
-    commit(EDIT_PLAYLIST_START)
-    playlistsApi.updatePlaylist(data, (err, playlist) => {
-      if (err) commit(EDIT_PLAYLIST_ERROR)
-      else commit(EDIT_PLAYLIST_END, playlist)
-      if (callback) callback(err, playlist)
-    })
+  editPlaylist ({ commit, rootGetters }, { data, callback }) {
+    if (!rootGetters.isCurrentUserClient) {
+      commit(EDIT_PLAYLIST_START)
+      playlistsApi.updatePlaylist(data, (err, playlist) => {
+        if (err) commit(EDIT_PLAYLIST_ERROR)
+        else commit(EDIT_PLAYLIST_END, playlist)
+        if (callback) callback(err, playlist)
+      })
+    } else {
+      callback()
+    }
   },
 
   deletePlaylist ({ commit }, { playlist, callback }) {

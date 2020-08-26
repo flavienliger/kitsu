@@ -1,6 +1,12 @@
+import Vue from 'vue'
 import productionsApi from '../api/productions'
 import { sortProductions, sortByName } from '../../lib/sorting'
-import { updateModelFromList, removeModelFromList } from '../../lib/models'
+import {
+  addToIdList,
+  removeFromIdList,
+  removeModelFromList,
+  updateModelFromList
+} from '../../lib/models'
 import {
   LOAD_PRODUCTIONS_START,
   LOAD_PRODUCTIONS_ERROR,
@@ -33,6 +39,12 @@ import {
 
   TEAM_ADD_PERSON,
   TEAM_REMOVE_PERSON,
+  PRODUCTION_ADD_ASSET_TYPE,
+  PRODUCTION_REMOVE_ASSET_TYPE,
+  PRODUCTION_ADD_TASK_TYPE,
+  PRODUCTION_REMOVE_TASK_TYPE,
+  PRODUCTION_ADD_TASK_STATUS,
+  PRODUCTION_REMOVE_TASK_STATUS,
   ASSIGN_TASKS,
 
   ADD_METADATA_DESCRIPTOR_END,
@@ -57,16 +69,6 @@ const initialState = {
   isProductionsLoading: false,
   isProductionsLoadingError: false,
   isOpenProductionsLoading: false,
-
-  editProduction: {
-    isLoading: false,
-    isError: false
-  },
-
-  deleteProduction: {
-    isLoading: false,
-    isError: false
-  },
 
   assetsPath: { name: 'open-productions' },
   assetTypesPath: { name: 'open-productions' },
@@ -100,12 +102,21 @@ const helpers = {
     } else {
       return { name: 'open-productions' }
     }
+  },
+
+  isEmptyArray (production, field) {
+    return (
+      !production ||
+      !production[field] ||
+      production[field].length === 0
+    )
   }
 }
 
 const getters = {
   productions: state => state.productions,
   productionMap: state => state.productionMap,
+  productionStatusMap: state => state.productionStatusMap,
   openProductions: state => state.openProductions,
   productionStatus: state => state.productionStatus,
 
@@ -115,9 +126,6 @@ const getters = {
   isProductionsLoadingError: state => state.isProductionsLoadingError,
   isOpenProductionsLoading: state => state.isOpenProductionsLoading,
 
-  editProduction: state => state.editProduction,
-  deleteProduction: state => state.deleteProduction,
-
   assetsPath: state => state.assetsPath,
   assetTypesPath: state => state.assetTypesPath,
   shotsPath: state => state.shotsPath,
@@ -126,6 +134,55 @@ const getters = {
   breakdownPath: state => state.breakdownPath,
   playlistsPath: state => state.playlistsPath,
   teamPath: state => state.teamPath,
+
+  productionAssetTypes: (state, getters, rootState) => {
+    if (helpers.isEmptyArray(state.currentProduction, 'asset_types')) {
+      return rootState.assetTypes.assetTypes
+    } else {
+      return sortByName(
+        state.currentProduction
+          .asset_types
+          .map(id => rootState.assetTypes.assetTypeMap[id])
+      )
+    }
+  },
+
+  productionTaskStatuses: (state, getters, rootState) => {
+    if (helpers.isEmptyArray(state.currentProduction, 'task_statuses')) {
+      return rootState.taskStatus.taskStatus
+    } else {
+      return sortByName(
+        state.currentProduction
+          .task_statuses
+          .map(id => rootState.taskStatus.taskStatusMap[id])
+      )
+    }
+  },
+
+  getProductionTaskStatuses: (state, getters, rootState) => (id) => {
+    const production = state.productionMap[id]
+    if (helpers.isEmptyArray(production, 'task_statuses')) {
+      return rootState.taskStatus.taskStatus
+    } else {
+      return sortByName(
+        production
+          .task_statuses
+          .map(id => rootState.taskStatus.taskStatusMap[id])
+      )
+    }
+  },
+
+  productionTaskTypes: (state, getters, rootState) => {
+    if (helpers.isEmptyArray(state.currentProduction, 'task_types')) {
+      return rootState.taskTypes.taskTypes
+    } else {
+      return sortByName(
+        state.currentProduction
+          .task_types
+          .map(id => rootState.taskTypes.taskTypeMap[id])
+      )
+    }
+  },
 
   currentProduction: (state) => {
     if (state.currentProduction) {
@@ -164,23 +221,17 @@ const getters = {
     }
   },
 
-  productionStatusOptions: state => state.productionStatus.map(
-    (status) => { return { label: status.name, value: status.id } }
-  ),
-  openProductionOptions: state => state.openProductions.map(
-    (production) => { return { label: production.name, value: production.id } }
-  ),
-
-  getProduction: (state, getters) => (id) => {
-    return state.productions.find(
-      (production) => production.id === id
+  productionAssetTypeOptions: (state, getters) => {
+    return getters.productionAssetTypes.map(
+      assetType => ({ label: assetType.name, value: assetType.id })
     )
   },
-  getProductionStatus: (state, getters) => (id) => {
-    return state.productionStatus.find(
-      (productionStatus) => productionStatus.id === id
-    )
-  }
+  productionStatusOptions: state => state.productionStatus.map(
+    status => ({ label: status.name, value: status.id })
+  ),
+  openProductionOptions: state => state.openProductions.map(
+    production => ({ label: production.name, value: production.id })
+  )
 }
 
 const actions = {
@@ -226,42 +277,29 @@ const actions = {
       .catch((err) => console.error(err))
   },
 
-  newProduction ({ commit, state }, { data, callback }) {
+  newProduction ({ commit, state }, data) {
     commit(EDIT_PRODUCTION_START, data)
-    productionsApi.newProduction(data, (err, production) => {
-      if (err) {
-        commit(EDIT_PRODUCTION_ERROR)
-      } else {
+    return productionsApi.newProduction(data)
+      .then((production) => {
         commit(EDIT_PRODUCTION_END, production)
-      }
-      if (callback) callback(err, production)
-    })
+      })
   },
 
-  editProduction ({ commit, state }, payload) {
+  editProduction ({ commit, state }, data) {
     commit(EDIT_PRODUCTION_START)
-    productionsApi.updateProduction(payload.data, (err, production) => {
-      if (err) {
-        commit(EDIT_PRODUCTION_ERROR)
-      } else {
+    return productionsApi.updateProduction(data)
+      .then((production) => {
         commit(EDIT_PRODUCTION_END, production)
-      }
-      if (payload.callback) payload.callback(err)
-    })
+      })
   },
 
-  deleteProduction ({ commit, state }, payload) {
+  deleteProduction ({ commit, state }, production) {
     commit(DELETE_PRODUCTION_START)
-    const production = payload.production
-    productionsApi.deleteProduction(production, (err) => {
-      if (err) {
-        commit(DELETE_PRODUCTION_ERROR)
-      } else {
+    return productionsApi.deleteProduction(production)
+      .then(() => {
         commit(REMOVE_PRODUCTION, production)
         commit(DELETE_PRODUCTION_END)
-      }
-      if (payload.callback) payload.callback(err)
-    })
+      })
   },
 
   setProduction ({ commit, rootGetters }, productionId) {
@@ -300,27 +338,67 @@ const actions = {
   },
 
   addPersonToTeam ({ commit, state }, person) {
-    return new Promise((resolve, reject) => {
-      commit(TEAM_ADD_PERSON, person.id)
-      return productionsApi.addPersonToTeam(
-        state.currentProduction.id,
-        person.id
-      )
-        .then(resolve)
-        .catch(reject)
-    })
+    commit(TEAM_ADD_PERSON, person.id)
+    return productionsApi.addPersonToTeam(
+      state.currentProduction.id,
+      person.id
+    )
   },
 
   removePersonFromTeam ({ commit, state }, person) {
-    return new Promise((resolve, reject) => {
-      commit(TEAM_REMOVE_PERSON, person.id)
-      return productionsApi.removePersonFromTeam(
-        state.currentProduction.id,
-        person.id
-      )
-        .then(resolve)
-        .catch(reject)
-    })
+    commit(TEAM_REMOVE_PERSON, person.id)
+    return productionsApi.removePersonFromTeam(
+      state.currentProduction.id,
+      person.id
+    )
+  },
+
+  addAssetTypeToProduction ({ commit, state }, assetTypeId) {
+    commit(PRODUCTION_ADD_ASSET_TYPE, assetTypeId)
+    return productionsApi.addAssetTypeToProduction(
+      state.currentProduction.id,
+      assetTypeId
+    )
+  },
+
+  removeAssetTypeFromProduction ({ commit, state }, assetTypeId) {
+    commit(PRODUCTION_REMOVE_ASSET_TYPE, assetTypeId)
+    return productionsApi.removeAssetTypeFromProduction(
+      state.currentProduction.id,
+      assetTypeId
+    )
+  },
+
+  addTaskTypeToProduction ({ commit, state }, taskTypeId) {
+    commit(PRODUCTION_ADD_TASK_TYPE, taskTypeId)
+    return productionsApi.addTaskTypeToProduction(
+      state.currentProduction.id,
+      taskTypeId
+    )
+  },
+
+  removeTaskTypeFromProduction ({ commit, state }, taskTypeId) {
+    commit(PRODUCTION_REMOVE_TASK_TYPE, taskTypeId)
+    return productionsApi.removeTaskTypeFromProduction(
+      state.currentProduction.id,
+      taskTypeId
+    )
+  },
+
+  addTaskStatusToProduction ({ commit, state }, taskStatusId) {
+    commit(PRODUCTION_ADD_TASK_STATUS, taskStatusId)
+    return productionsApi.addTaskStatusToProduction(
+      state.currentProduction.id,
+      taskStatusId
+    )
+  },
+
+  removeTaskStatusFromProduction ({ commit, state }, taskStatusId) {
+    commit(PRODUCTION_REMOVE_TASK_STATUS, taskStatusId)
+    return productionsApi.removeTaskStatusFromProduction(
+      state.currentProduction.id,
+      taskStatusId
+    )
   },
 
   addMetadataDescriptor ({ commit, state }, descriptor) {
@@ -374,6 +452,7 @@ const actions = {
         .then((descriptor) => {
           const descriptorMap = {}
           state.openProductions.forEach((production) => {
+            if (!production.descriptors) Vue.set(production, 'descriptors', [])
             production.descriptors.forEach((desc) => {
               descriptorMap[desc.id] = desc
             })
@@ -462,18 +541,13 @@ const mutations = {
   },
 
   [EDIT_PRODUCTION_START] (state, data) {
-    state.editProduction.isLoading = true
-    state.editProduction.isError = false
   },
   [EDIT_PRODUCTION_ERROR] (state) {
-    state.editProduction.isLoading = false
-    state.editProduction.isError = true
   },
 
   [EDIT_PRODUCTION_END] (state, newProduction) {
-    const productionStatus = getters.getProductionStatus(state)(
-      newProduction.project_status_id
-    )
+    const productionStatus =
+      state.productionStatusMap[newProduction.project_status_id]
     const production = state.productions.find(
       (production) => production.id === newProduction.id
     )
@@ -520,10 +594,6 @@ const mutations = {
       }
       state.productions = sortProductions(state.productions)
     }
-    state.editProduction = {
-      isLoading: false,
-      isError: false
-    }
   },
 
   [ADD_PRODUCTION] (state, production) {
@@ -561,17 +631,9 @@ const mutations = {
   },
 
   [DELETE_PRODUCTION_START] (state) {
-    state.deleteProduction = {
-      isLoading: true,
-      isError: false
-    }
   },
 
   [DELETE_PRODUCTION_ERROR] (state) {
-    state.deleteProduction = {
-      isLoading: false,
-      isError: true
-    }
   },
 
   [REMOVE_PRODUCTION] (state, productionToDelete) {
@@ -583,10 +645,6 @@ const mutations = {
   },
 
   [DELETE_PRODUCTION_END] (state, productionToDelete) {
-    state.deleteProduction = {
-      isLoading: false,
-      isError: false
-    }
   },
 
   [PRODUCTION_PICTURE_FILE_SELECTED] (state, formData) {
@@ -623,18 +681,35 @@ const mutations = {
   },
 
   [TEAM_ADD_PERSON] (state, personId) {
-    if (!state.currentProduction.team.find((pId) => pId === personId)) {
-      state.currentProduction.team.push(personId)
-    }
+    addToIdList(state.currentProduction, 'team', personId)
   },
 
   [TEAM_REMOVE_PERSON] (state, personId) {
-    const personIndex = state.currentProduction.team.findIndex(
-      (pId) => pId === personId
-    )
-    if (personIndex !== null) {
-      state.currentProduction.team.splice(personIndex, 1)
-    }
+    removeFromIdList(state.currentProduction, 'team', personId)
+  },
+
+  [PRODUCTION_ADD_ASSET_TYPE] (state, assetTypeId) {
+    addToIdList(state.currentProduction, 'asset_types', assetTypeId)
+  },
+
+  [PRODUCTION_REMOVE_ASSET_TYPE] (state, assetTypeId) {
+    removeFromIdList(state.currentProduction, 'asset_types', assetTypeId)
+  },
+
+  [PRODUCTION_ADD_TASK_STATUS] (state, taskStatusId) {
+    addToIdList(state.currentProduction, 'task_statuses', taskStatusId)
+  },
+
+  [PRODUCTION_REMOVE_TASK_STATUS] (state, taskStatusId) {
+    removeFromIdList(state.currentProduction, 'task_statuses', taskStatusId)
+  },
+
+  [PRODUCTION_ADD_TASK_TYPE] (state, taskTypeId) {
+    addToIdList(state.currentProduction, 'task_types', taskTypeId)
+  },
+
+  [PRODUCTION_REMOVE_TASK_TYPE] (state, taskTypeId) {
+    removeFromIdList(state.currentProduction, 'task_types', taskTypeId)
   },
 
   [ADD_METADATA_DESCRIPTOR_END] (state, { production, descriptor }) {
@@ -642,7 +717,7 @@ const mutations = {
       if (production.descriptors) {
         production.descriptors.push(descriptor)
       } else {
-        production.descriptors = [descriptor]
+        Vue.set(production, 'descriptors', [descriptor])
       }
     }
   },
@@ -652,7 +727,7 @@ const mutations = {
       if (production.descriptors) {
         updateModelFromList(production.descriptors, descriptor)
       } else {
-        production.descriptors = []
+        Vue.set(production, 'descriptors', [])
       }
     }
   },

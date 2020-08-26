@@ -21,6 +21,7 @@
         <button-simple
           icon="edit"
           @click="modals.edit = true"
+          v-if="isCurrentUserManager"
         />
       </div>
     </div>
@@ -30,7 +31,7 @@
       <page-subtitle :text="$t('shots.tasks')" />
       <entity-task-list
         class="task-list"
-        :entries="currentShot ? currentShot.tasks : []"
+        :entries="currentTasks"
         :is-loading="!currentShot"
         :is-error="false"
         @task-selected="onTaskSelected"
@@ -138,8 +139,8 @@
                 <entity-thumbnail
                   :entity="asset"
                   :square="true"
-                  :empty-width="100"
-                  :empty-height="100"
+                  :empty-width="103"
+                  :empty-height="103"
                   :with-link="false"
                 />
                 <div>
@@ -234,36 +235,14 @@ export default {
     }
   },
 
-  created () {
-    if (!this.currentProduction) {
-      this.setProduction(this.$route.params.production_id)
-    } else {
-      const options = { productionId: this.currentProduction.id }
-      if (this.currentEpisode) options.episodeId = this.currentEpisode.id
-      this.$store.commit('RESET_PRODUCTION_PATH', options)
-    }
-
+  mounted () {
     this.clearSelectedTasks()
-
     this.currentShot = this.getCurrentShot()
 
     this.casting.isLoading = true
     this.casting.isError = false
 
-    if (!this.currentShot) {
-      this.loadShot(this.route.params.shot_id)
-        .then(() => {
-          this.currentShot = this.getCurrentShot()
-          return this.loadShotCasting(this.currentShot)
-        })
-        .then(() => {
-          this.casting.isLoading = false
-        })
-        .catch((err) => {
-          this.casting.isError = true
-          console.error(err)
-        })
-    } else {
+    if (this.currentShot) {
       this.loadShotCasting(this.currentShot)
         .then(() => {
           this.casting.isLoading = false
@@ -272,17 +251,27 @@ export default {
           this.casting.isError = true
           console.error(err)
         })
+    } else {
+      this.resetData()
     }
   },
 
   computed: {
     ...mapGetters([
+      'currentEpisode',
       'currentProduction',
+      'isCurrentUserManager',
+      'isTVShow',
       'route',
+      'taskMap',
       'shotMap',
       'shotMetadataDescriptors',
       'shotsPath'
     ]),
+
+    currentTasks () {
+      return this.currentShot ? this.currentShot.tasks : []
+    },
 
     title () {
       if (this.currentShot) {
@@ -313,10 +302,11 @@ export default {
 
   methods: {
     ...mapActions([
+      'clearSelectedTasks',
       'editShot',
-      'loadShot',
-      'loadShotCasting',
-      'clearSelectedTasks'
+      'loadAssets',
+      'loadShots',
+      'loadShotCasting'
     ]),
 
     changeTab (tab) {
@@ -351,11 +341,34 @@ export default {
 
     onTaskSelected (task) {
       this.currentTask = task
+    },
+
+    resetData () {
+      this.loadShots(() => {
+        this.loadAssets()
+          .then(() => {
+            this.currentShot = this.getCurrentShot()
+            return this.loadShotCasting(this.currentShot)
+              .then(() => {
+                this.casting.isLoading = false
+              })
+              .catch((err) => {
+                console.error(err)
+                this.casting.isError = true
+              })
+          })
+      })
     }
   },
 
   watch: {
-    $route () { this.handleModalsDisplay() }
+    currentProduction () {
+      if (!this.isTVShow) this.resetData()
+    },
+
+    currentEpisode () {
+      if (this.isTVShow) this.resetData()
+    }
   },
 
   metaInfo () {
@@ -436,12 +449,13 @@ h2.subtitle {
 .asset-type {
   text-transform: uppercase;
   font-size: 1.2em;
-  color: $grey;
+  color: var(--text);
   margin-top: 2em;
   margin-bottom: 0.4em;
 }
 
 .asset-list {
+  color: var(--text);
   display: flex;
   flex-wrap: wrap;
 }
@@ -487,6 +501,10 @@ h2.subtitle {
 
 .task-list {
   width: 100%;
+}
+
+.datatable-row {
+  user-select: text;
 }
 
 @media screen and (max-width: 768px) {

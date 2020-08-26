@@ -2,6 +2,7 @@ export default {
 
   asset_types: {
     all_asset_types: 'Tous les types d\'assets',
+    create_error: 'Une erreur est survenue en créant l\'asset. Êtes vous sûr qu\'il n\'y a pas un asset avec un nom similaire ?',
     delete_error: 'Une erreur est survenue en supprimant un type d\'asset. Êtes vous sûr qu\'aucun asset est lié à ce type d\'asset?',
     delete_text: 'Êtes vous sur de vouloir enlever {name} de la base de données ?',
     edit_title: 'Modifier le type d\'asset',
@@ -49,6 +50,7 @@ export default {
     title: 'Casting',
     edit_label: 'Changer le label de l\'asset',
     label: 'Label',
+    picture_mode: 'Passer en mode image',
     text_mode: 'Passer en mode texte',
     options: {
       fixed: 'fixe',
@@ -64,6 +66,7 @@ export default {
     change_preview: 'Changer previz',
     comment_from_client: 'Commentaire du client',
     edit_title: 'Modifier le commentaire',
+    edit_error: 'Une erreur est survenue en éditant le commentaire',
     error: 'Une erreur est survenue en postant le commentaire',
     empty_text: 'Ce commentaire est vide',
     no_file_attached: 'Aucun fichier attaché',
@@ -86,6 +89,7 @@ export default {
   custom_actions: {
     delete_text: 'Êtes-vous sûr de supprimer l\'action personnalisée {name} de la base de données?',
     delete_error: 'Une erreur est survenue en supprimant l\'action personnalisée.',
+    create_error: 'Une erreur est survenue durant la création. Êtes vous sûr qu\'aucune action a un nom similaire ?',
     edit_title: 'Modifier une action personnalisée',
     new_custom_action: 'Ajouter une action personnalisée',
     number: 'action pesonnalisée | actions personnalisées',
@@ -106,11 +110,14 @@ export default {
 
   entities: {
     build_filter: {
+      asset_type: 'Type d\'asset',
+      all_types: 'Tous les types d\'assets',
       assignation: 'Assignation',
       assignation_exists_for: 'Des assignations existent pour',
       assigned_to: 'Assigné à',
       descriptor: 'Metadata',
       equal: 'Égal',
+      in: 'Dans',
       no_assignation_for: 'Pas d\'assignation pour',
       no_filter: 'Pas de filtre',
       not_equal: 'Pas égal',
@@ -118,6 +125,8 @@ export default {
       status: 'Statut de tâche',
       thumbnail: 'A une vignette',
       title: 'Filtré sur...',
+      union_and: 'Valide tous les filtres suivants',
+      union_or: 'Valide un des filtres suivants',
       with_thumbnail: 'Avec vignette',
       without_thumbnail: 'Sans vignette'
     },
@@ -142,6 +151,7 @@ export default {
     edit_title: 'Éditer épisode',
     delete_text: 'Etes vous sûr de vouloir retirer {name} de la base de données ? Tous les plans et préviz liés seront supprimés. Pour confirmer, tapez le nom de l\'épisode en dessous',
     delete_error: 'Une erreur est survenue en créant le plan, êtes vous sûr que la séquence n\'a plus aucun lien ?',
+    edit_error: 'Une erreur est survenue en sauvegardant l\'épisode. Êtes vous sûr qu\'aucun épisode existe avec un nom similaire ?',
     empty_list: 'Il n\'y a pas d\'épisodes dans la production. Voulez vous en créer ?',
     empty_list_client: 'Il n\'y a pas d\'épisode pour cette production.',
     new_episode: 'Nouvel épisode',
@@ -151,6 +161,10 @@ export default {
       name: 'Nom',
       description: 'Description'
     }
+  },
+
+  estimation: {
+    title: 'Estimation'
   },
 
   keyboard: {
@@ -227,6 +241,8 @@ export default {
     loading_data: 'Chargement des données',
     loading_error: 'Une erreur est survenue en chargeant les données.',
     logout: 'Se déconnecter',
+    person: 'Personne',
+    main_pack: 'Main Pack',
     maximize: 'Maximiser',
     minimize: 'Minimiser',
     modify: 'Modifier',
@@ -301,6 +317,7 @@ export default {
     mention_you_on: 'vous a mentionné sur',
     no_notifications: 'Il n\'y a pas encore de notifications pour vous pour les projets en cours',
     title: 'Notifications',
+    unread_notifications: 'notification non lue | notifications non lues',
     with_preview: 'avec une version'
   },
 
@@ -333,9 +350,10 @@ export default {
     client_playlist: 'Playlist Client',
     created_at: 'Créé le :',
     create_for_selection: 'Créer une playlist pour la sélection courante',
-    delete_text: 'Êtes vous sûr de vouloir supprimer {name} de la base de données ?',
     create_title: 'Créer playlist',
+    delete_text: 'Êtes vous sûr de vouloir supprimer {name} de la base de données ?',
     delete_error: 'Une erreur est survenue en supprimant la playlist.',
+    edit_error: 'Une erreur est survenue en sauvegardant la playlist. Êtes vous sûr qu\'aucune playlist n\'existe avec un nom similaire ?',
     download_zip: 'Télécharger en .zip',
     failed: 'Echec',
     for_client: 'Pour le client',
@@ -365,7 +383,6 @@ export default {
       for_entity: 'Sélectionne le type d\'entité à afficher'
     },
     actions: {
-      comments: 'Montrer/Cacher les commentaires',
       annotation: 'Annotation',
       annotation_text: 'Double clic sur la preview pour ajouter du texte',
       annotation_delete: 'Supprimer l\'annotation',
@@ -374,19 +391,22 @@ export default {
       annotation_big: 'Gros',
       annotation_medium: 'Moyen',
       annotation_small: 'Petit',
+      comments: 'Montrer/Cacher les commentaires',
       change_task_type: 'Changer le task type',
       delete: 'Supprimer la playlist',
       download: 'Télécharger…',
       edit: 'Modifier la playlist',
       entity_list: 'Montrer/Cacher la liste d\'entités',
       fullscreen: 'Plein écran',
-      split_screen: 'Partager l\'écran',
       next_shot: 'Prochain shot',
-      previous_shot: 'Shot précédent',
       next_frame: 'Prochaine frame',
       previous_frame: 'Frame précédente',
+      previous_shot: 'Shot précédent',
+      pause: 'Pause',
       play: 'Lecture',
-      pause: 'Pause'
+      save_playlist: 'Sauvegarde la playlist',
+      speed: 'Changer la vitesse',
+      split_screen: 'Partager l\'écran'
     }
   },
 
@@ -395,6 +415,7 @@ export default {
     active_persons: 'présent | présents',
     add_member_to_team: 'Ajouter un membre à l\'équipe: ',
     create_invite: 'Créer et envoyer une invitation',
+    create_error: 'Une erreur est survenue en créant l\'utilisateur. Êtes vous sûr qu\'il n\'y a pas un utilisateur avec un nom ou un email similaire ?',
     delete_text: 'Êtes vous sûr de vouloir retirer {personName} de la base de données? Tous les commentaires et préviz liés seront supprimés. Pour confirmer, tapez le nom complet de la personne en dessous',
     delete_error: 'Une erreur est survenue lors de la suppression. Il y a probablement des données liées à elle. Etes vous sur que cette personne n\'a aucune tâche assignée et n\'a fait aucun commentaire ?',
     edit_title: 'Modifier les informations de',
@@ -562,14 +583,15 @@ export default {
 
   sequences: {
     all_sequences: 'Toutes les séquences',
-    title: 'Stats séquences',
-    number: 'séquence | séquences',
-    new_sequence: 'Nouvelle séquence',
-    edit_title: 'Éditer séquence',
     delete_text: 'Etes vous sûr de vouloir retirer {name} de la base de données ? Tous les plans et préviz liés seront supprimés. Pour confirmer, tapez le nom de la séquence en dessous',
     delete_error: 'Une erreur est survenue en créant le plan, êtes vous sûr que la séquence n\'a plus aucun lien ?',
+    edit_error: 'Une erreur est survenue en sauvegardant la séquence. Êtes vous sûr qu\'aucune séquence n\'existe avec un nom similaire ?',
+    edit_title: 'Éditer séquence',
     empty_list: 'Il n\'y a pas de séquence dans la production. Voulez vous en créer ?',
     empty_list_client: 'Il n\'y pas de séquences dans cette production.',
+    number: 'séquence | séquences',
+    new_sequence: 'Nouvelle séquence',
+    title: 'Stats séquences',
     fields: {
       name: 'Nom',
       description: 'Description'
@@ -588,6 +610,9 @@ export default {
       slack_token: 'Token Slack (optionnel)',
       hours_by_day: 'Heures par jour',
       use_original_name: 'Utiliser les noms de fichiers originaux pour le téléchargement'
+    },
+    production: {
+      empty_list: 'La liste est vide. Cela signifie que tous les entrées sont disponibles aux utilisateurs. Ajouter des éléments à cette liste si vous voulez limiter les choix disponibles aux utilisateurs.'
     },
     save: {
       button: 'Sauvegarder les paramètres',
@@ -652,6 +677,7 @@ export default {
   },
 
   task_status: {
+    create_error: 'Une erreur est survenue en créant le statut. Êtes vous sûr qu\'il n\'y a pas un statut avec un nom similaire ?',
     delete_text: 'Êtes vous sur de vouloir retirer {name} de la base de données ?',
     delete_error: 'Une erreur est survenue lors de la suppression du statut de tâche. Êtes vous sûr qu\'aucune tâche n\'est lié à ce statut de tâche ?',
     edit_title: 'Modifier statut',
@@ -671,6 +697,7 @@ export default {
   },
 
   task_types: {
+    create_error: 'Une erreur est survenue en créant le type de tâche. Êtes vous sûr qu\'il n\'y a pas un type avec un nom similaire ?',
     delete_text: 'Êtes vous sur de vouloir retirer {name} de la base de données ?',
     delete_error: 'Une erreur est survenue lors de la suppression du type de tâche. Êtes vous sûr qu\'aucune tâche n\'est lié à ce type de tâche ?',
     edit_title: 'Modifier le type de tâches',
@@ -747,9 +774,11 @@ export default {
     fields: {
       asset_type: 'Type d\'asset',
       assignees: 'Assignés',
+      count: 'Nombre',
       duration: 'Duration',
       due_date: 'Pour le',
       end_date: 'Date de fin',
+      estimated_quota: 'Quota Moy.',
       estimation: 'Estimation',
       entity: 'Entité',
       entity_name: 'Nom',
@@ -761,6 +790,7 @@ export default {
       real_start_date: 'Date de WIP',
       start_date: 'Date de début',
       retake_count: 'Retakes',
+      seconds: 'Secondes',
       sequence: 'Séquence',
       task_status: 'Statut',
       last_comment: 'Dernier commentaire',

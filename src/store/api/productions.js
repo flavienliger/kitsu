@@ -17,16 +17,16 @@ export default {
     client.get('/api/data/project-status', callback)
   },
 
-  newProduction (production, callback) {
+  newProduction (production) {
     const data = {
       name: production.name,
       project_status_id: production.project_status_id,
       production_type: production.production_type
     }
-    client.post('/api/data/projects/', data, callback)
+    return client.ppost('/api/data/projects/', data)
   },
 
-  updateProduction (production, callback) {
+  updateProduction (production) {
     const data = {
       name: production.name,
       project_status_id: production.project_status_id,
@@ -38,7 +38,7 @@ export default {
       end_date: production.end_date,
       man_days: production.man_days
     }
-    client.put(`/api/data/projects/${production.id}`, data, callback)
+    return client.pput(`/api/data/projects/${production.id}`, data)
   },
 
   postAvatar (productionId, formData, callback) {
@@ -49,36 +49,53 @@ export default {
     )
   },
 
-  deleteProduction (production, callback) {
-    client.del(`/api/data/projects/${production.id}?force=true`, callback)
+  deleteProduction (production) {
+    return client.pdel(`/api/data/projects/${production.id}?force=true`)
   },
 
   addPersonToTeam (productionId, personId) {
-    return new Promise((resolve, reject) => {
-      const data = {
-        person_id: personId
-      }
-      client.post(
-        `/api/data/projects/${productionId}/team`,
-        data,
-        (err, production) => {
-          if (err) reject(err)
-          else resolve(production)
-        }
-      )
-    })
+    const data = { person_id: personId }
+    return client.ppost(`/api/data/projects/${productionId}/team`, data)
   },
 
   removePersonFromTeam (productionId, personId) {
-    return new Promise((resolve, reject) => {
-      client.del(
-        `/api/data/projects/${productionId}/team/${personId}`,
-        (err, production) => {
-          if (err) reject(err)
-          else resolve(production)
-        }
-      )
-    })
+    return client.pdel(`/api/data/projects/${productionId}/team/${personId}`)
+  },
+
+  addAssetTypeToProduction (productionId, assetTypeId) {
+    const data = { asset_type_id: assetTypeId }
+    const path = `/api/data/projects/${productionId}/settings/asset-types`
+    return client.ppost(path, data)
+  },
+
+  removeAssetTypeFromProduction (productionId, assetTypeId) {
+    const path =
+      `/api/data/projects/${productionId}/settings/asset-types/${assetTypeId}`
+    return client.pdel(path)
+  },
+
+  addTaskTypeToProduction (productionId, taskTypeId) {
+    const data = { task_type_id: taskTypeId }
+    const path = `/api/data/projects/${productionId}/settings/task-types`
+    return client.ppost(path, data)
+  },
+
+  removeTaskTypeFromProduction (productionId, taskTypeId) {
+    const path =
+      `/api/data/projects/${productionId}/settings/task-types/${taskTypeId}`
+    return client.pdel(path)
+  },
+
+  addTaskStatusToProduction (productionId, taskStatusId) {
+    const data = { task_status_id: taskStatusId }
+    const path = `/api/data/projects/${productionId}/settings/task-status`
+    return client.ppost(path, data)
+  },
+
+  removeTaskStatusFromProduction (productionId, taskStatusId) {
+    const path =
+      `/api/data/projects/${productionId}/settings/task-status/${taskStatusId}`
+    return client.pdel(path)
   },
 
   addMetadataDescriptor (productionId, descriptor) {

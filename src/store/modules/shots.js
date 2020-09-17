@@ -76,6 +76,7 @@ import {
   REMOVE_SEQUENCE,
   ADD_SHOT,
   UPDATE_SHOT,
+  UPDATE_SHOTS_BY_SEQUENCE,
   REMOVE_SHOT,
   CANCEL_SHOT,
   RESTORE_SHOT_END,
@@ -310,6 +311,7 @@ const initialState = {
   episodeSearchText: '',
   episodeStats: {},
   shotSorting: [],
+  shotsBySequence: {},
 
   currentEpisode: null,
   episodeValidationColumns: [],
@@ -369,6 +371,9 @@ const getters = {
   sequenceSearchQueries: state => state.sequenceSearchQueries,
   shotMap: state => state.shotMap,
   shotSorting: state => state.shotSorting,
+  shotsBySequence: state => seqId => (
+    state.shotsBySequence[seqId]
+  ),
 
   isFps: state => state.isFps,
   isFrames: state => state.isFrames,
@@ -541,6 +546,16 @@ const actions = {
           if (callback) callback(err)
         })
       }
+    })
+  },
+
+  loadShotsBySequence ({ commit, state }, sequenceId) {
+    shotsApi.getShotsByEpisode(sequenceId, (err, shots) => {
+      if (err) console.error(err)
+      commit(UPDATE_SHOTS_BY_SEQUENCE, {
+        sequenceId: sequenceId,
+        shots: shots
+      })
     })
   },
 
@@ -1211,6 +1226,9 @@ const mutations = {
     const sortedSequences = sortSequences(sequences)
     state.sequenceMap = sequenceMap
     state.sequences = sortedSequences
+    sortedSequences.forEach(sequence => {
+      state.shotsBySequence[sequence.id] = []
+    })
     state.sequenceIndex = buildSequenceIndex(sortedSequences)
     state.displayedSequences = sortedSequences.slice(0, PAGE_SIZE * 2)
     state.displayedSequencesLength = sortedSequences.length
@@ -1403,6 +1421,7 @@ const mutations = {
     }
     state.sequences.push(sequence)
     state.sequences = sortSequences(state.sequences)
+    state.shotsBySequence[sequence.id] = []
     state.sequenceMap[sequence.id] = sequence
     state.sequenceIndex = buildSequenceIndex(state.sequences)
   },
@@ -1658,6 +1677,7 @@ const mutations = {
       }
     }
     state.sequences = sortedSequences
+    state.shotsBySequence[state.sequence.id] = []
     state.displayedSequences.push(sequence)
     state.displayedSequences = sortSequences(state.displayedSequences)
     state.sequenceIndex = buildSequenceIndex(sortedSequences)
@@ -1721,11 +1741,20 @@ const mutations = {
     const maxY = state.nbValidationColumns
     state.shotSelectionGrid = buildSelectionGrid(maxX, maxY)
     state.shotMap[shot.id] = shot
+    state.shotsBySequence[shot.sequence_id].push(shot)
   },
 
   [UPDATE_SHOT] (state, shot) {
     Object.assign(state.shotMap[shot.id], shot)
     cache.shotIndex = buildShotIndex(cache.shots)
+  },
+
+  [UPDATE_SHOTS_BY_SEQUENCE] (state, data) {
+    console.log('SET shots', data.shots.length)
+    // Vue.set(state.shotsBySequence, data.sequenceId, data.shots)
+    const o = {}
+    o[data.sequenceId] = data.shots
+    state.shotsBySequence = Object.assign({}, state.shotsBySequence, o)
   },
 
   [REMOVE_SHOT] (state, shotToDelete) {

@@ -12,6 +12,11 @@ export default {
     client.get(path, callback)
   },
 
+  getShotsByEpisode (sequenceId, callback) {
+    const path = `/api/data/sequences/${sequenceId}/shots`
+    client.get(path, callback)
+  },
+
   getSequence (sequenceId) {
     return client.getModel('sequences', sequenceId)
   },

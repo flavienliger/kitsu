@@ -1,5 +1,9 @@
 <template>
 <div class="columns fixed-page">
+  <project-arbo
+    :sequences="sequences"
+  />
+
   <div class="column main-column">
     <div class="shots page">
       <div class="shot-list-header page-header">
@@ -271,6 +275,7 @@ import ShowInfosButton from '../widgets/ShowInfosButton'
 import ShotHistoryModal from '../modals/ShotHistoryModal'
 import ShotList from '../lists/ShotList.vue'
 import TaskInfo from '../sides/TaskInfo.vue'
+import ProjectArbo from '../sides/ProjectArbo.vue'
 
 export default {
   name: 'shots',
@@ -295,7 +300,8 @@ export default {
     ShowAssignationsButton,
     ShowInfosButton,
     ShotList,
-    TaskInfo
+    TaskInfo,
+    ProjectArbo
   },
 
   data () {

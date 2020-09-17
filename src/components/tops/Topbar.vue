@@ -190,7 +190,7 @@ export default {
     return {
       currentProductionId: this.$route.params.production_id,
       currentEpisodeId: this.$route.params.episode_id,
-      currentProjectSection: this.isCurrentUserClient ? 'playlists' : 'assets',
+      currentProjectSection: this.isCurrentUserClient ? 'playlists' : 'shots',
       kitsuVersion: version,
       silent: false,
 
@@ -301,8 +301,8 @@ export default {
 
     sectionOptions () {
       let options = [
-        { label: this.$t('assets.title'), value: 'assets' },
         { label: this.$t('shots.title'), value: 'shots' },
+        { label: this.$t('assets.title'), value: 'assets' },
         { label: this.$t('sequences.title'), value: 'sequences' },
         { label: this.$t('episodes.title'), value: 'episodes' },
         {
@@ -333,8 +333,8 @@ export default {
 
       if (this.isCurrentUserVendor) {
         options = [
-          { label: this.$t('assets.title'), value: 'assets' },
           { label: this.$t('shots.title'), value: 'shots' },
+          { label: this.$t('assets.title'), value: 'assets' },
           { label: this.$t('sequences.title'), value: 'sequences' },
           { label: this.$t('episodes.title'), value: 'episodes' },
           {

@@ -60,7 +60,7 @@ export default {
       type: Boolean
     },
     lastProductionScreen: {
-      default: 'assets',
+      default: 'shots',
       type: String
     }
   },

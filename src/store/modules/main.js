@@ -13,11 +13,11 @@ import {
 } from '../mutation-types'
 
 const initialState = {
-  currentProductionScreen: 'assets',
+  currentProductionScreen: 'shots',
   isDarkTheme: false,
   isSidebarHidden: true,
   isUserMenuHidden: true,
-  lastProductionScreen: 'assets',
+  lastProductionScreen: 'shots',
   lastProductionViewed: null
 }
 

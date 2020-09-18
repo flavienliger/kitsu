@@ -4,7 +4,7 @@
       <template v-for="(group, k) in sequences">
         <li :key="k">
           <chevron-down-icon
-            v-if="openedSequences[k].show"
+            v-if="openedSequences[k]"
             v-on:click="showShots(k, group)"
             size="1.4x"
             class="chevron">
@@ -17,7 +17,7 @@
           </chevron-right-icon>
           <span v-on:click="openElement(group)">{{ group.name }}</span>
         </li>
-        <ul :key="k+'a'" v-show="openedSequences[k].show">
+        <ul :key="k+'a'" v-show="openedSequences[k]">
           <li :key="i" v-for="(shot, i) in shotsBySequence(group.id)">
             <span v-on:click="openElement(shot)">{{ shot.name }}</span>
           </li>
@@ -47,7 +47,7 @@ export default {
 
   data () {
     return {
-      openedSequences: [{ show: false }]
+      openedSequences: []
     }
   },
 
@@ -59,32 +59,22 @@ export default {
 
   methods: {
     ...mapActions([
-      'loadShots'
+      'loadShotsBySequence'
     ]),
     showShots (idx, sequence) {
-      // test to replace openedSequence by sequences directly
-      this.openedSequences[idx].show = !this.openedSequences[idx].show
+      this.$set(this.openedSequences, idx, !this.openedSequences[idx])
       this.loadShots(sequence.id)
     },
     loadShots (seqId) {
       const shots = this.shotsBySequence(seqId)
       if (shots.length === 0) {
-        this.$store.dispatch('loadShotsBySequence', seqId)
+        this.loadShotsBySequence(seqId)
       }
     },
     openElement (el) {
       const input = document.querySelector('.search-input')
       input.value = el.name
       input.dispatchEvent(new Event('input'))
-    }
-  },
-
-  watch: {
-    sequences () {
-      this.openedSequences = []
-      for (let i = 0; i < this.sequences.length; i++) {
-        this.openedSequences.push({ show: false })
-      }
     }
   }
 }

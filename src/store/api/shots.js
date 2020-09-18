@@ -12,7 +12,7 @@ export default {
     client.get(path, callback)
   },
 
-  getShotsByEpisode (sequenceId, callback) {
+  getShotsBySequence (sequenceId, callback) {
     const path = `/api/data/sequences/${sequenceId}/shots`
     client.get(path, callback)
   },

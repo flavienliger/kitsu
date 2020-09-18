@@ -550,7 +550,7 @@ const actions = {
   },
 
   loadShotsBySequence ({ commit, state }, sequenceId) {
-    shotsApi.getShotsByEpisode(sequenceId, (err, shots) => {
+    shotsApi.getShotsBySequence(sequenceId, (err, shots) => {
       if (err) console.error(err)
       commit(UPDATE_SHOTS_BY_SEQUENCE, {
         sequenceId: sequenceId,

@@ -5,10 +5,17 @@ import peopleApi from '../api/people'
 import playlistsApi from '../api/playlists'
 import {
   sortComments,
+  sortRevisionPreviewFiles,
   sortByName
 } from '../../lib/sorting'
+import {
+  arrayMove
+} from '../../lib/models'
+
 import personStore from './people'
 import taskTypeStore from './tasktypes'
+import assetStore from './assets'
+import shotStore from './shots'
 
 import {
   LOAD_ASSETS_END,
@@ -21,7 +28,6 @@ import {
   LOAD_TASK_COMMENTS_END,
   LOAD_TASK_ENTITY_PREVIEW_FILES_END,
   LOAD_TASK_SUBSCRIBE_END,
-  LOAD_SEQUENCE_SUBSCRIBE_END,
 
   NEW_TASK_COMMENT_END,
   NEW_TASK_END,
@@ -63,6 +69,7 @@ import {
   SET_LAST_COMMENT_DRAFT,
 
   REMOVE_FIRST_PREVIEW_FILE_TO_UPLOAD,
+  UPDATE_REVISION_PREVIEW_POSITION,
 
   RESET_ALL
 } from '../mutation-types'
@@ -149,108 +156,56 @@ const getters = {
 }
 
 const actions = {
-  loadTask ({ commit, state }, { taskId, callback }) {
-    tasksApi.getTask(taskId, (err, task) => {
-      if (!err) {
+  loadTask ({ commit, state }, { taskId }) {
+    return tasksApi.getTask(taskId)
+      .then(task => {
         commit(LOAD_TASK_END, task)
-      } else {
-        console.error(err)
-      }
-      if (callback) callback(err, task)
-    })
+        return Promise.resolve(task)
+      })
   },
 
   loadTaskSubscribed ({ commit, state }, { taskId, callback }) {
-    tasksApi.getTaskSubscribed(taskId, (err, subscribed) => {
-      if (!err) {
+    return tasksApi.getTaskSubscribed(taskId)
+      .then(subscribed => {
         commit(LOAD_TASK_SUBSCRIBE_END, { taskId, subscribed })
-      }
-      if (callback) callback(err, subscribed)
-    })
+        return Promise.resolve(subscribed)
+      })
   },
 
   subscribeToTask ({ commit, state }, taskId) {
-    return new Promise((resolve, reject) => {
-      tasksApi.subscribeToTask(taskId, (err) => {
-        if (err) {
-          reject(err)
-        } else {
-          commit(LOAD_TASK_SUBSCRIBE_END, { taskId, subscribed: true })
-          resolve()
-        }
+    return tasksApi.subscribeToTask(taskId)
+      .then(() => {
+        commit(LOAD_TASK_SUBSCRIBE_END, { taskId, subscribed: true })
+        return Promise.resolve(true)
       })
-    })
-  },
-
-  subscribeToSequence ({ commit, state }, { sequenceId, taskTypeId }) {
-    return new Promise((resolve, reject) => {
-      tasksApi.subscribeToSequence(sequenceId, taskTypeId, (err) => {
-        if (err) {
-          reject(err)
-        } else {
-          commit(LOAD_SEQUENCE_SUBSCRIBE_END, {
-            sequenceId,
-            taskTypeId,
-            subscribed: true
-          })
-          resolve()
-        }
-      })
-    })
   },
 
   unsubscribeFromTask ({ commit, state }, taskId) {
-    return new Promise((resolve, reject) => {
-      tasksApi.unsubscribeFromTask(taskId, (err) => {
-        if (err) {
-          reject(err)
-        } else {
-          commit(LOAD_TASK_SUBSCRIBE_END, { taskId, subscribed: false })
-          resolve()
-        }
+    return tasksApi.unsubscribeFromTask(taskId)
+      .then(() => {
+        commit(LOAD_TASK_SUBSCRIBE_END, { taskId, subscribed: false })
+        return Promise.resolve(false)
       })
-    })
-  },
-
-  unsubscribeFromSequence ({ commit, state }, { sequenceId, taskTypeId }) {
-    return new Promise((resolve, reject) => {
-      tasksApi.unsubscribeFromSequence(sequenceId, taskTypeId, (err) => {
-        if (err) {
-          reject(err)
-        } else {
-          commit(LOAD_SEQUENCE_SUBSCRIBE_END, {
-            sequenceId,
-            taskTypeId,
-            subscribed: false
-          })
-          resolve()
-        }
-      })
-    })
   },
 
   loadTaskComments (
     { commit, state, dispatch },
     { taskId, entityId, callback }
   ) {
-    tasksApi.getTaskComments(taskId, (err, comments) => {
-      if (err) {
-        callback(err)
-      } else {
+    return tasksApi.getTaskComments(taskId)
+      .then(comments => {
         commit(LOAD_TASK_COMMENTS_END, { comments, taskId })
-        dispatch('loadTaskEntityPreviewFiles', { callback, entityId })
-      }
-    })
+        return dispatch('loadTaskEntityPreviewFiles', entityId)
+      })
   },
 
-  loadTaskEntityPreviewFiles ({ commit, state }, { callback, entityId }) {
+  loadTaskEntityPreviewFiles ({ commit, state }, entityId) {
     const entity = { id: entityId }
-    playlistsApi.getEntityPreviewFiles(entity)
+    return playlistsApi.getEntityPreviewFiles(entity)
       .then((previewFiles) => {
         commit(LOAD_TASK_ENTITY_PREVIEW_FILES_END, previewFiles)
-        callback()
+        return Promise.resolve(previewFiles)
       })
-      .catch(callback)
   },
 
   commentTask (
@@ -266,26 +221,31 @@ const actions = {
   },
 
   loadComment ({ commit, state }, { commentId, callback }) {
-    tasksApi.getTaskComment({ id: commentId }, (err, comment) => {
-      if (!err) {
+    return tasksApi.getTaskComment({ id: commentId })
+      .then(comment => {
         commit(NEW_TASK_COMMENT_END, { comment, taskId: comment.object_id })
-      }
-      if (callback) callback(err, comment)
-    })
+        return Promise.resolve(comment)
+      })
   },
 
-  createTasks (
-    { commit, state },
+  createTasks ({ commit, state },
     payload
   ) {
+    let entityIds = []
+    if (payload.selectionOnly) {
+      if (payload.type === 'shots') {
+        entityIds = shotStore.cache.result.map(shot => shot.id)
+      } else {
+        entityIds = assetStore.cache.result.map(asset => asset.id)
+      }
+    }
     const data = {
       task_type_id: payload.task_type_id,
       type: payload.type,
-      project_id: payload.project_id
+      project_id: payload.project_id,
+      entityIds
     }
-    tasksApi.createTasks(data, (err, tasks) => {
-      if (payload.callback) payload.callback(err, tasks)
-    })
+    return tasksApi.createTasks(data)
   },
 
   createSelectedTasks (
@@ -335,13 +295,8 @@ const actions = {
     })
   },
 
-  deleteAllTasks ({ commit, state }, { projectId, taskTypeId }) {
-    return new Promise((resolve, reject) => {
-      tasksApi.deleteAllTasks(projectId, taskTypeId, (err) => {
-        if (err) reject(err)
-        else resolve()
-      })
-    })
+  deleteAllTasks ({ commit, state }, { projectId, taskTypeId, taskIds }) {
+    return tasksApi.deleteAllTasks(projectId, taskTypeId, taskIds)
   },
 
   createTask (
@@ -366,27 +321,37 @@ const actions = {
     })
   },
 
-  changeSelectedTaskStatus ({ commit, state }, {
+  changeSelectedTaskStatus ({ commit, state, rootGetters }, {
     taskStatusId,
-    comment,
-    callback
+    comment
   }) {
-    async.eachSeries(Object.keys(state.selectedTasks), (taskId, next) => {
+    const tasksToChange = []
+    const production = rootGetters.currentProduction
+    Object.keys(state.selectedTasks).forEach((taskId) => {
       const task = state.taskMap[taskId]
-      if (task && task.task_status_id !== taskStatusId) {
-        actions.commentTask({ commit, state }, {
-          taskId: taskId,
-          taskStatusId: taskStatusId,
-          comment: comment || ''
+      const isChanged = task && (
+        task.task_status_id !== taskStatusId ||
+        (comment && comment.length > 0)
+      )
+      if (isChanged) {
+        tasksToChange.push({
+          object_id: taskId,
+          task_status_id: taskStatusId,
+          comment: comment || '',
+          checklist: []
         })
-          .then(next)
-          .catch(next)
-      } else {
-        next()
       }
-    }, (err) => {
-      callback(err)
     })
+    return tasksApi.commentTasks(production.id, tasksToChange)
+      .then((comments) => {
+        comments.forEach(comment => {
+          commit(
+            NEW_TASK_COMMENT_END,
+            { comment, taskId: comment.object_id }
+          )
+        })
+        return Promise.resolve(comments)
+      })
   },
 
   changeSelectedPriorities (
@@ -443,29 +408,27 @@ const actions = {
     if (checklist) {
       commit(UPDATE_COMMENT_CHECKLIST, { comment, checklist })
     }
-    tasksApi.editTaskComment(comment, (err, comment) => {
-      if (!err) {
+    return tasksApi.editTaskComment(comment)
+      .then(comment => {
         commit(EDIT_COMMENT_END, { taskId, comment })
-      }
-      if (callback) callback(err)
-    })
+        return Promise.resolve(comment)
+      })
   },
 
   deleteTaskComment ({ commit, rootState }, { taskId, commentId, callback }) {
     const todoStatus = rootState.taskStatus.taskStatus.find((taskStatus) => {
       return taskStatus.short_name === 'todo'
     })
-    tasksApi.deleteTaskComment(taskId, commentId, (err) => {
-      if (!err) {
+    return tasksApi.deleteTaskComment(taskId, commentId)
+      .then(() => {
         commit(DELETE_COMMENT_END, {
           commentId,
           taskId,
           taskStatusMap: rootState.taskStatus.taskStatusMap,
           todoStatus
         })
-      }
-      if (callback) callback(err)
-    })
+        return Promise.resolve()
+      })
   },
 
   commentTaskWithPreview (
@@ -513,21 +476,19 @@ const actions = {
     const addPreview = (form) => {
       return tasksApi
         .addExtraPreview(previewId, taskId, commentId)
-        .then((preview) => {
-          return tasksApi.uploadPreview(preview.id, form)
-        })
+        .then(preview => tasksApi.uploadPreview(preview.id, form))
         .then((preview) => {
           const comment = getters.getTaskComment(taskId, commentId)
-          preview.extension = 'png'
           commit(ADD_PREVIEW_END, {
             preview,
             taskId,
             commentId,
             comment
           })
+          return Promise.resolve(preview)
         })
     }
-    state.previewForms.reduce((accumulatorPromise, form) => {
+    return state.previewForms.reduce((accumulatorPromise, form) => {
       return accumulatorPromise.then(() => {
         return addPreview(form)
       })
@@ -538,7 +499,7 @@ const actions = {
     return tasksApi.deletePreview(taskId, commentId, previewId)
       .then(() => {
         commit(DELETE_PREVIEW_END, { taskId, previewId })
-        Promise.resolve(previewId)
+        return Promise.resolve(previewId)
       })
   },
 
@@ -548,7 +509,7 @@ const actions = {
       .setPreview(entityId, previewId)
       .then((entity) => {
         commit(SET_PREVIEW, { taskId, entityId, previewId, taskMap })
-        Promise.resolve()
+        return Promise.resolve()
       })
   },
 
@@ -562,24 +523,21 @@ const actions = {
           preview,
           annotations
         })
-        Promise.resolve()
+        return Promise.resolve()
       })
       .catch(console.error)
   },
 
   refreshPreview ({ commit, state }, { taskId, previewId }) {
-    return new Promise((resolve, reject) => {
-      tasksApi.getPreviewFile(previewId)
-        .then((preview) => {
-          commit(UPDATE_PREVIEW_ANNOTATION, {
-            taskId,
-            preview,
-            annotations: preview.annotations
-          })
-          resolve()
+    return tasksApi.getPreviewFile(previewId)
+      .then((preview) => {
+        commit(UPDATE_PREVIEW_ANNOTATION, {
+          taskId,
+          preview,
+          annotations: preview.annotations
         })
-        .catch(reject)
-    })
+        return Promise.resolve()
+      })
   },
 
   assignSelectedTasks ({ commit, state }, { personId, callback }) {
@@ -615,7 +573,7 @@ const actions = {
   },
 
   loadPreviewFileFormData ({ commit }, previewForms) {
-    commit('PREVIEW_FILE_SELECTED', previewForms)
+    commit(PREVIEW_FILE_SELECTED, previewForms)
   },
 
   addSelectedTask ({ commit }, task) {
@@ -664,14 +622,12 @@ const actions = {
   },
 
   removeTaskSearch ({ commit, rootGetters }, searchQuery) {
-    return new Promise((resolve, reject) => {
-      const production = rootGetters.currentProduction
-      peopleApi.removeFilter(searchQuery, (err) => {
+    const production = rootGetters.currentProduction
+    peopleApi.removeFilter(searchQuery)
+      .then(() => {
         commit(REMOVE_TASK_SEARCH_END, { searchQuery, production })
-        if (err) reject(err)
-        else resolve()
+        return Promise.resolve(searchQuery)
       })
-    })
   },
 
   ackComment ({ commit, rootGetters }, comment) {
@@ -683,6 +639,15 @@ const actions = {
   pinComment ({ commit }, comment) {
     commit(PIN_COMMENT, comment)
     return tasksApi.pinComment(comment)
+  },
+
+  updateRevisionPreviewPosition ({ commit }, payload) {
+    if (payload.newIndex < payload.previousIndex) payload.newIndex++
+    commit(UPDATE_REVISION_PREVIEW_POSITION, payload)
+    return tasksApi.updateRevisionPreviewPosition(
+      payload.previewId,
+      payload.newIndex
+    )
   }
 }
 
@@ -735,13 +700,19 @@ const mutations = {
     state.taskPreviews[taskId] = comments.reduce((previews, comment) => {
       if (comment.previews && comment.previews.length > 0) {
         const preview = comment.previews[0]
-        preview.previews = comment.previews.map((p) => {
-          return {
-            id: p.id,
-            annotations: p.annotations
-          }
-        })
-
+        preview.previews = sortRevisionPreviewFiles(comment.previews
+          .map((p) => {
+            return {
+              id: p.id,
+              annotations: p.annotations,
+              extension: p.extension,
+              task_id: p.task_id,
+              revision: p.revision,
+              position: p.position,
+              original_name: p.original_name
+            }
+          })
+        )
         previews.push(preview)
         return previews
       } else {
@@ -869,6 +840,8 @@ const mutations = {
       id: preview.id,
       feedback: false,
       revision: preview.revision,
+      position: preview.position,
+      original_name: preview.original_name,
       extension: preview.extension
     }
 
@@ -930,6 +903,8 @@ const mutations = {
       id: preview.id,
       feedback: false,
       revision: preview.revision,
+      position: preview.position,
+      original_name: preview.original_name,
       extension: preview.extension
     }
     state.taskPreviews[taskId].shift()
@@ -1132,6 +1107,23 @@ const mutations = {
 
   [SET_LAST_COMMENT_DRAFT] (state, lastCommentDraft) {
     state.lastCommentDraft = lastCommentDraft
+  },
+
+  [UPDATE_REVISION_PREVIEW_POSITION] (state, {
+    previousIndex,
+    newIndex,
+    revision,
+    taskId
+  }) {
+    const preview = state.taskPreviews[taskId].find(
+      p => p.revision === revision
+    )
+    preview.previews = arrayMove(preview.previews, previousIndex, newIndex)
+    let i = 1
+    preview.previews.forEach(preview => {
+      preview.position = i
+      i++
+    })
   },
 
   [REMOVE_FIRST_PREVIEW_FILE_TO_UPLOAD] (state) {

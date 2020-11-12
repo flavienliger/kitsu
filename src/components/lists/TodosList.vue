@@ -163,7 +163,6 @@
 
 <script>
 import { mapGetters, mapActions } from 'vuex'
-import moment from 'moment-timezone'
 
 import EntityThumbnail from '../widgets/EntityThumbnail'
 import TaskTypeCell from '../cells/TaskTypeName'
@@ -176,6 +175,7 @@ import ValidationCell from '../cells/ValidationCell'
 import { selectionListMixin } from './selection'
 import { formatListMixin } from './format_mixin'
 import { PAGE_SIZE } from '../../lib/pagination'
+import { formatSimpleDate } from '@/lib/time'
 
 export default {
   name: 'todos-list',
@@ -245,7 +245,7 @@ export default {
     },
 
     formatDate (date) {
-      return date ? moment(date).fromNow() : ''
+      return date ? formatSimpleDate(date) : ''
     },
 
     onBodyScroll (event, position) {
@@ -339,7 +339,11 @@ export default {
       const production = this.productionMap[entity.project_id]
       let episodeId = entity.episode_id
       if (production && production.production_type === 'tvshow' && !episodeId) {
-        episodeId = production.first_episode_id
+        if (entityType === 'shot') {
+          episodeId = production.first_episode_id
+        } else {
+          episodeId = 'main'
+        }
       }
 
       if (episodeId) {
@@ -356,7 +360,7 @@ export default {
       const i = lastSelection.x
       const j = lastSelection.y
       let validationCell = null
-      if (event.ctrlKey) {
+      if (event.ctrlKey || event.metaKey) {
         if (event.keyCode === 37) {
           validationCell = this.select(i, j - 1)
         } else if (event.keyCode === 38) {

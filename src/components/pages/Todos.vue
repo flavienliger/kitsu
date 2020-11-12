@@ -68,8 +68,8 @@
       >
         <search-query-list
           :queries="todoSearchQueries"
-          @changesearch="changeSearch"
-          @removesearch="removeSearchQuery"
+          @change-search="changeSearch"
+          @remove-search="removeSearchQuery"
         />
       </div>
 
@@ -167,18 +167,20 @@ export default {
     if (this.todosSearchText.length > 0) {
       this.$refs['todos-search-field'].setValue(this.todosSearchText)
     }
-    this.loadTodos({
-      date: this.selectedDate,
-      callback: () => {
-        if (this.todoList) {
-          this.$nextTick(() => {
-            this.todoList.setScrollPosition(
-              this.todoListScrollPosition
-            )
-          })
+    this.$nextTick(() => {
+      this.loadTodos({
+        date: this.selectedDate,
+        callback: () => {
+          if (this.todoList) {
+            this.$nextTick(() => {
+              this.todoList.setScrollPosition(
+                this.todoListScrollPosition
+              )
+            })
+          }
+          this.resizeHeaders()
         }
-        this.resizeHeaders()
-      }
+      })
     })
   },
 
@@ -197,6 +199,7 @@ export default {
       'isTodosLoadingError',
       'nbSelectedTasks',
       'selectedTasks',
+      'taskMap',
       'taskTypeMap',
       'todosSearchText',
       'timeSpentMap',
@@ -208,7 +211,7 @@ export default {
     ]),
 
     loggableTodos () {
-      return this.displayedTodos
+      return this.sortedTasks
         .filter((task) => {
           return this.taskTypeMap[task.task_type_id].allow_timelog
         })
@@ -231,12 +234,41 @@ export default {
 
     sortedTasks () {
       const isName = this.currentSort === 'entity_name'
+      const isPriority = this.currentSort === 'priority'
+      const isDueDate = this.currentSort === 'due_date'
       const tasks = [...this.displayedTodos]
       if (isName) {
         return tasks.sort(
           firstBy('project_name')
             .thenBy('task_type_name')
             .thenBy('full_entity_name')
+        )
+      } else if (isPriority) {
+        return tasks.sort(
+          firstBy('priority', -1)
+            .thenBy(
+              (a, b) => {
+                if (!a.due_date) return 1
+                else if (!b.due_date) return -1
+                else return a.due_date.localeCompare(b.due_date)
+              }
+            )
+            .thenBy('project_name')
+            .thenBy('task_type_name')
+            .thenBy('entity_name')
+        )
+      } else if (isDueDate) {
+        return tasks.sort(
+          firstBy(
+            (a, b) => {
+              if (!a.due_date) return 1
+              else if (!b.due_date) return -1
+              else return a.due_date.localeCompare(b.due_date)
+            }
+          )
+            .thenBy('project_name')
+            .thenBy('task_type_name')
+            .thenBy('entity_name')
         )
       } else {
         return tasks.sort(

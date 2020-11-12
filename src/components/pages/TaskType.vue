@@ -135,8 +135,8 @@
       <div class="query-list">
         <search-query-list
           :queries="searchQueries"
-          @changesearch="changeSearch"
-          @removesearch="removeSearchQuery"
+          @change-search="changeSearch"
+          @remove-search="removeSearchQuery"
           v-if="!loading.entities"
         />
       </div>
@@ -206,7 +206,7 @@ import { searchMixin } from '../mixins/search'
 import csv from '../../lib/csv'
 import { buildSupervisorTaskIndex, indexSearch } from '../../lib/indexing'
 import { sortPeople } from '../../lib/sorting'
-import { slugify } from '../../lib/string'
+import stringHelpers from '../../lib/string'
 import {
   daysToMinutes,
   formatSimpleDate,
@@ -718,7 +718,7 @@ export default {
       if (this.currentEpisode) {
         nameData.splice(1, 0, this.currentEpisode.name)
       }
-      const name = slugify(nameData.join('_'))
+      const name = stringHelpers.slugify(nameData.join('_'))
       csv.buildCsvFile(name, taskLines)
     },
 
@@ -899,7 +899,7 @@ export default {
           !this.taskStatusMap[task.task_status_id].is_done &&
           endDate.isBefore(moment())
         )
-        return isLate ? '#FF3860' : null
+        return isLate ? '#FF3860' : '#999'
       } else {
         return null
       }

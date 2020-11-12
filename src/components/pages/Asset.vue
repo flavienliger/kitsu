@@ -298,7 +298,8 @@ export default {
       'loadAssets',
       'loadAssetCastIn',
       'loadAssetCasting',
-      'loadShots'
+      'loadShots',
+      'setCurrentEpisode'
     ]),
 
     changeTab (tab) {
@@ -317,18 +318,16 @@ export default {
       form.id = this.currentAsset.id
       this.loading.edit = true
       this.errors.edit = false
-      this.editAsset({
-        data: form,
-        callback: (err) => {
-          if (err) {
-            this.loading.edit = false
-            this.errors.edit = true
-          } else {
-            this.loading.edit = false
-            this.modals.edit = false
-          }
-        }
-      })
+      this.editAsset(form)
+        .then(() => {
+          this.loading.edit = false
+          this.modals.edit = false
+        })
+        .catch((err) => {
+          console.error(err)
+          this.loading.edit = false
+          this.errors.edit = true
+        })
     },
 
     onTaskSelected (task) {
@@ -336,6 +335,9 @@ export default {
     },
 
     resetData () {
+      if (this.$route.params.episode_id === 'main') {
+        this.setCurrentEpisode('main')
+      }
       this.loadAssets()
         .then(() => {
           this.currentAsset = this.getCurrentAsset()
@@ -369,7 +371,7 @@ export default {
     },
 
     currentEpisode () {
-      if (this.isTVShow) this.resetData()
+      if (this.isTVShow && this.currentEpisode.id !== 'main') this.resetData()
     }
   },
 

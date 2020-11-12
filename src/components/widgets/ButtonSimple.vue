@@ -2,6 +2,7 @@
 <button
   :class="{
     button: true,
+    active: active,
     'is-on': isOn
   }"
   :title="title"
@@ -115,6 +116,22 @@
     :class="iconClass"
     v-if="icon === 'funnel'"
   />
+  <refresh-cw-icon
+    :class="iconClass"
+    v-if="icon === 'refresh'"
+  />
+  <repeat-icon
+    :class="iconClass"
+    v-if="icon === 'repeat'"
+  />
+  <volume-x-icon
+    :class="iconClass"
+    v-if="icon === 'soundoff'"
+  />
+  <volume-2-icon
+    :class="iconClass"
+    v-if="icon === 'soundon'"
+  />
 
   <span
     :class="{
@@ -149,6 +166,8 @@ import {
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  RefreshCwIcon,
+  RepeatIcon,
   RotateCcwIcon,
   SaveIcon,
   SkipBackIcon,
@@ -156,6 +175,8 @@ import {
   TrashIcon,
   TypeIcon,
   UploadIcon,
+  VolumeXIcon,
+  Volume2Icon,
   XIcon
 } from 'vue-feather-icons'
 
@@ -181,6 +202,8 @@ export default {
     PauseIcon,
     PlayIcon,
     PlusIcon,
+    RefreshCwIcon,
+    RepeatIcon,
     RotateCcwIcon,
     SaveIcon,
     SkipBackIcon,
@@ -188,10 +211,16 @@ export default {
     TrashIcon,
     TypeIcon,
     UploadIcon,
+    VolumeXIcon,
+    Volume2Icon,
     XIcon
   },
 
   props: {
+    active: {
+      default: false,
+      type: Boolean
+    },
     icon: {
       default: '',
       type: String

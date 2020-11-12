@@ -92,6 +92,11 @@
                {{ $t("settings.title") }}
              </router-link>
            </p>
+           <p @click="toggleSidebar()">
+             <router-link :to="{name: 'logs'}">
+               {{ $t("logs.title") }}
+             </router-link>
+           </p>
          </div>
 
         </section>
@@ -125,7 +130,6 @@ export default {
     ...mapGetters([
       'isSidebarHidden',
       'isCurrentUserAdmin',
-      'isCurrentUserCGArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'isCurrentUserVendor',

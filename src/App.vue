@@ -27,6 +27,7 @@ export default {
     ...mapGetters([
       'assetMap',
       'assetTypeMap',
+      'currentEpisode',
       'currentProduction',
       'episodeMap',
       'isCurrentUserAdmin',
@@ -34,6 +35,7 @@ export default {
       'isDarkTheme',
       'isLoginLoading',
       'isSavingCommentPreview',
+      'isTVShow',
       'route',
       'personMap',
       'productionMap',
@@ -70,7 +72,7 @@ export default {
   methods: {
     ...mapActions([
       'getOrganisation',
-      'getTask',
+      'loadTask',
       'loadAsset',
       'loadAssetType',
       'loadComment',
@@ -83,7 +85,6 @@ export default {
       'loadShot',
       'loadTaskStatus',
       'loadTaskType',
-      'refreshPreview',
       'refreshMetadataDescriptor',
       'removeAsset'
     ]),
@@ -191,7 +192,11 @@ export default {
         if (
           !this.shotMap[eventData.shot_id] &&
           this.currentProduction &&
-          this.currentProduction.id === eventData.project_id
+          this.currentProduction.id === eventData.project_id &&
+          (
+            !this.isTVShow ||
+            this.currentEpisode.id === eventData.episode_id
+          )
         ) {
           setTimeout(() => {
             this.loadShot(eventData.shot_id)
@@ -232,6 +237,13 @@ export default {
       'asset:delete' (eventData) {
         if (this.assetMap[eventData.asset_id]) {
           this.$store.commit('REMOVE_ASSET', { id: eventData.asset_id })
+        }
+      },
+
+      'task:delete' (eventData) {
+        const task = this.taskMap[eventData.task_id]
+        if (task) {
+          this.$store.commit('DELETE_TASK_END', task)
         }
       },
 
@@ -326,12 +338,17 @@ export default {
 
       'comment:new' (eventData) {
         const commentId = eventData.comment_id
-        if (!this.isSavingCommentPreview) this.loadComment({ commentId })
+        if (!this.isSavingCommentPreview) {
+          this.loadComment({ commentId })
+            .catch(console.error)
+        }
       },
 
       'task:update' (eventData) {
         if (this.taskMap[eventData.task_id]) {
-          this.getTask({ taskId: eventData.task_id })
+          this.$nextTick(() => {
+            this.loadTask({ taskId: eventData.task_id })
+          })
         }
       },
 
@@ -637,7 +654,7 @@ body {
 }
 
 th.actions {
-  min-width: 120px;
+  min-width: 160px;
 }
 
 td.actions {
@@ -948,6 +965,12 @@ textarea.input:focus {
   margin-right: 0em;
 }
 
+.button .icon.is-small {
+  height: 1.1rem;
+  line-height: 1.1rem;
+  width: 1.1rem;
+}
+
 .button.highlighted {
   background: #00B242;
   color: white;
@@ -973,7 +996,6 @@ textarea.input:focus {
 }
 
 .query-list .tag .delete {
-  margin-left: 0.5em;
   transform: rotate(45deg) scale(0.7)
 }
 
@@ -1785,6 +1807,21 @@ th.validation-cell {
     padding: 0.3em 0.5em;
     margin-left: 0.5em;
   }
+}
+
+.separator {
+  margin: .5rem;
+  &:before {
+    content: '';
+    border-left: 1px solid $dark-grey-lightest;
+    height: .5rem;
+  }
+}
+
+#model-viewer {
+  width: 100%;
+  height: 100%;
+  background: black;
 }
 
 @media screen and (max-width: 1000px) {

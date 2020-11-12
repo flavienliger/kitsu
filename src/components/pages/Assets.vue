@@ -62,8 +62,8 @@
         <div class="query-list">
           <search-query-list
             :queries="assetSearchQueries"
-            @changesearch="changeSearch"
-            @removesearch="removeSearchQuery"
+            @change-search="changeSearch"
+            @remove-search="removeSearchQuery"
             v-if="!isAssetsLoading && !initialLoading"
           />
         </div>
@@ -147,6 +147,7 @@
     :text="deleteAllTasksText()"
     :error-text="$t('tasks.delete_all_error')"
     :lock-text="deleteAllTasksLockText"
+    :selection-option="true"
     @confirm="confirmDeleteAllTasks"
     @cancel="modals.isDeleteAllTasksDisplayed = false"
   />
@@ -169,7 +170,7 @@
     :parsed-csv="parsedCSV"
     :form-data="assetsCsvFormData"
     :columns="columns"
-    :dataMatchers="dataMatchers"
+    :data-matchers="dataMatchers"
     :database="filteredAssets"
     @reupload="resetImport"
     @confirm="uploadImportFile"
@@ -235,7 +236,7 @@ import { mapGetters, mapActions } from 'vuex'
 import csv from '../../lib/csv'
 import func from '../../lib/func'
 import { sortByName } from '../../lib/sorting'
-import { slugify } from '../../lib/string'
+import stringHelpers from '../../lib/string'
 import { searchMixin } from '../mixins/search'
 import { entityListMixin } from '../mixins/entities'
 
@@ -299,10 +300,6 @@ export default {
         'Type',
         'Name',
         'Description'
-      ],
-      dataMatchers: [
-        'Type',
-        'Name'
       ],
       deleteAllTasksLockText: null,
       descriptorToEdit: {},
@@ -405,6 +402,7 @@ export default {
       'currentEpisode',
       'currentProduction',
       'displayedAssetsByType',
+      'episodeMap',
       'openProductions',
       'isAssetsLoading',
       'isAssetsLoadingError',
@@ -435,7 +433,11 @@ export default {
       const assets = {}
       this.displayedAssetsByType.forEach(type => {
         type.forEach(item => {
-          const assetKey = `${item.asset_type_name}${item.name}`
+          let assetKey = ''
+          if (this.isTVShow && item.episode_id) {
+            assetKey += this.episodeMap[item.episode_id].name
+          }
+          assetKey += `${item.asset_type_name}${item.name}`
           assets[assetKey] = true
         })
       })
@@ -461,6 +463,17 @@ export default {
       const productionName =
         this.currentProduction ? this.currentProduction.name : ''
       return `${productionName} ${this.$t('assets.title')} - Kitsu`
+    },
+
+    dataMatchers () {
+      return this.isTVShow ? [
+        'Episode',
+        'Type',
+        'Name'
+      ] : [
+        'Type',
+        'Name'
+      ]
     }
   },
 
@@ -470,13 +483,12 @@ export default {
       'changeAssetSort',
       'commentTaskWithPreview',
       'createTasks',
-      'deleteAllTasks',
+      'deleteAllAssetTasks',
       'deleteAsset',
       'deleteMetadataDescriptor',
       'editAsset',
       'getAssetsCsvLines',
       'loadAssets',
-      'loadComment',
       'loadEpisodes',
       'newAsset',
       'removeAssetSearch',
@@ -584,49 +596,50 @@ export default {
       this.onSearchChange()
     },
 
-    confirmCreateTasks (form) {
+    confirmCreateTasks ({ form, selectionOnly }) {
       this.loading.creatingTasks = true
-      this.runTasksCreation(form, () => {
-        this.hideCreateTasksModal()
-        this.loading.creatingTasks = false
-      })
+      this.runTasksCreation(form, selectionOnly)
+        .then(() => {
+          this.reset()
+          this.hideCreateTasksModal()
+          this.loading.creatingTasks = false
+        })
     },
 
-    confirmCreateTasksAndStay (form) {
+    confirmCreateTasksAndStay ({ form, selectionOnly }) {
       this.loading.taskStay = true
-      this.runTasksCreation(form, () => {
-        this.loading.taskStay = false
-      })
+      this.runTasksCreation(form, selectionOnly)
+        .then(() => {
+          this.reset()
+          this.loading.taskStay = false
+        })
     },
 
-    runTasksCreation (form, callback) {
+    runTasksCreation (form, selectionOnly) {
       this.errors.creatingTasks = false
-      this.createTasks({
-        task_type_id: form.task_type_id,
+      return this.createTasks({
         type: 'assets',
+        task_type_id: form.task_type_id,
         project_id: this.currentProduction.id,
-        callback: (err) => {
-          if (err) {
-            this.errors.creatingTasks = true
-          } else {
-            this.loadAssets()
-          }
-          callback(err)
-        }
+        selectionOnly
       })
+        .catch(err => {
+          this.errors.creatingTasks = true
+          console.error(err)
+        })
     },
 
-    confirmDeleteAllTasks () {
+    confirmDeleteAllTasks (selectionOnly) {
       const taskTypeId = this.taskTypes.find(
         t => t.name === this.deleteAllTasksLockText
       ).id
       const projectId = this.currentProduction.id
       this.errors.deleteAllTasks = false
       this.loading.deleteAllTasks = true
-      this.deleteAllTasks({ projectId, taskTypeId })
+      this.deleteAllAssetTasks({ projectId, taskTypeId, selectionOnly })
         .then(() => {
           this.loading.deleteAllTasks = false
-          this.loadAssets()
+          if (!selectionOnly) this.loadAssets()
           this.modals.isDeleteAllTasksDisplayed = false
         }).catch((err) => {
           console.error(err)
@@ -725,6 +738,7 @@ export default {
           this.hideImportRenderModal()
           this.loading.importing = false
           this.loadEpisodes()
+            .catch(console.error)
           this.loadAssets()
         })
         .catch((err) => {
@@ -866,7 +880,7 @@ export default {
           if (this.currentEpisode) {
             nameData.splice(3, 0, this.currentEpisode.name)
           }
-          const name = slugify(nameData.join('_'))
+          const name = stringHelpers.slugify(nameData.join('_'))
           let headers = this.isTVShow ? ['Episode'] : []
           headers = headers.concat([
             this.$t('assets.fields.type'),

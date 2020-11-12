@@ -95,6 +95,7 @@
                 type="text"
                 :placeholder="$t('tasks.with_comment')"
                 @keyup.ctrl.enter="confirmTaskStatusChange"
+                @keyup.meta.enter="confirmTaskStatusChange"
                 v-model="statusComment"
               />
             </div>
@@ -144,9 +145,9 @@
               >
                 {{ $t('main.confirmation') }}
               </button>
-              <div class="" v-if="isCreationLoading">
-                <spinner :is-white="true" />
-              </div>
+            </div>
+            <div class="flexrow-item" v-else>
+              <spinner :is-white="true" />
             </div>
           </div>
         </div>
@@ -597,15 +598,18 @@ export default {
       if (!this.taskStatusId) {
         this.taskStatusId = this.taskStatusForCurrentUser[0].id
       }
-
       this.changeSelectedTaskStatus({
         taskStatusId: this.taskStatusId,
-        comment: this.statusComment,
-        callback: () => {
-          this.isChangeStatusLoading = false
-          this.statusComment = ''
-        }
+        comment: this.statusComment
       })
+        .then(() => {
+          this.statusComment = ''
+          this.isChangeStatusLoading = false
+        })
+        .catch(err => {
+          console.error(err)
+          this.isChangeStatusLoading = false
+        })
     },
 
     confirmPriorityChange () {
@@ -623,11 +627,15 @@ export default {
       this.isCreationLoading = true
       this.createSelectedTasks({
         type: type,
-        projectId: this.currentProduction.id,
-        callback: () => {
-          this.isCreationLoading = false
-        }
+        projectId: this.currentProduction.id
       })
+        .then(() => {
+          this.isCreationLoading = false
+        })
+        .catch((err) => {
+          this.isCreationLoading = false
+          console.error(err)
+        })
     },
 
     confirmTaskDeletion () {

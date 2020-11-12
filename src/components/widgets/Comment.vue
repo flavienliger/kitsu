@@ -17,7 +17,7 @@
           class="round-task-status-name"
           :style="{
             'background-color': statusColor,
-            color: comment.task_status.short_name === 'todo' ? 'grey' : 'white'
+            color: comment.task_status.short_name === 'todo' ? '#333' : 'white'
           }"
         >
           {{ comment.task_status.short_name }}
@@ -377,13 +377,13 @@ export default {
 
     pictureAttachments () {
       return this.comment.attachment_files.filter(attachment => {
-        return ['png', 'jpg', 'gif'].includes(attachment.extension)
+        return ['png', 'jpg', 'jpeg', 'gif'].includes(attachment.extension)
       })
     },
 
     fileAttachments () {
       return this.comment.attachment_files.filter(attachment => {
-        return !['png', 'jpg', 'gif'].includes(attachment.extension)
+        return !['png', 'jpg', 'jpeg', 'gif'].includes(attachment.extension)
       })
     },
 
@@ -392,12 +392,14 @@ export default {
     },
 
     fullDate () {
-      return this.commentDate.format('YYYY-MM-DD HH:mm:ss')
+      return this.commentDate
+        .tz(this.user.timezone)
+        .format('YYYY-MM-DD HH:mm:ss')
     },
 
     shortDate () {
       if (moment().diff(this.commentDate, 'days') > 1) {
-        return this.commentDate.format('MM/DD')
+        return this.commentDate.tz(this.user.timezone).format('MM/DD')
       } else {
         return this.commentDate.tz(this.user.timezone).format('HH:mm')
       }

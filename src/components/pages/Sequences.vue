@@ -27,7 +27,14 @@
       </span>
       <button-simple
         class="flexrow-item"
+        icon="refresh"
+        :title="$t('main.reload')"
+        @click="reloadData"
+      />
+      <button-simple
+        class="flexrow-item"
         icon="download"
+        :title="$t('main.csv.export_file')"
         @click="exportStatisticsToCsv"
       />
     </div>
@@ -35,8 +42,8 @@
     <div class="query-list mt1">
       <search-query-list
         :queries="sequenceSearchQueries"
-        @changesearch="changeSearch"
-        @removesearch="removeSearchQuery"
+        @change-search="changeSearch"
+        @remove-search="removeSearchQuery"
       />
     </div>
 
@@ -82,7 +89,7 @@
 import moment from 'moment'
 import { mapGetters, mapActions } from 'vuex'
 import csv from '../../lib/csv'
-import { slugify } from '../../lib/string'
+import stringHelpers from '../../lib/string'
 
 import ButtonSimple from '../widgets/ButtonSimple'
 import Combobox from '../widgets/Combobox'
@@ -159,15 +166,15 @@ export default {
   },
 
   mounted () {
-    setTimeout(() => {
+    this.loadShots(() => {
       this.initSequences()
-        .then(this.resizeHeaders)
         .then(() => {
           this.initialLoading = false
         })
+        .catch(err => console.error(err))
       this.setDefaultSearchText()
       this.setDefaultListScrollPosition()
-    }, 100)
+    })
   },
 
   methods: {
@@ -177,7 +184,6 @@ export default {
       'editSequence',
       'hideAssignations',
       'initSequences',
-      'loadComment',
       'loadShots',
       'removeSequenceSearch',
       'saveSequenceSearch',
@@ -186,6 +192,14 @@ export default {
       'setSequenceListScrollPosition',
       'showAssignations'
     ]),
+
+    reloadData () {
+      this.initialLoading = true
+      this.loadShots(() => {
+        this.initialLoading = false
+        this.computeSequenceStats()
+      })
+    },
 
     setDefaultSearchText () {
       if (this.sequenceSearchText.length > 0) {
@@ -213,7 +227,8 @@ export default {
         .then(() => {
           this.loading.edit = false
           this.modals.isNewDisplayed = false
-        }).catch(() => {
+        }).catch((err) => {
+          console.error(err)
           this.loading.edit = false
           this.errors.edit = true
         })
@@ -225,7 +240,8 @@ export default {
         .then(() => {
           this.loading.del = false
           this.modals.isDeleteDisplayed = false
-        }).catch(() => {
+        }).catch((err) => {
+          console.error(err)
           this.loading.del = false
           this.errors.del = true
         })
@@ -258,7 +274,6 @@ export default {
 
     onDeleteClicked (sequence) {
       this.sequenceToDelete = sequence
-      console.log('otot')
       this.modals.isDeleteDisplayed = true
     },
 
@@ -271,7 +286,6 @@ export default {
       this.$refs['sequence-search-field'].setValue(searchQuery.search_query)
       this.$refs['sequence-search-field']
         .$emit('change', searchQuery.search_query)
-      this.resizeHeaders()
     },
 
     saveSearchQuery (searchQuery) {
@@ -288,14 +302,6 @@ export default {
       this.setSequenceListScrollPosition(scrollPosition)
     },
 
-    resizeHeaders () {
-      setTimeout(() => {
-        if (this.$refs['sequence-list']) {
-          this.$refs['sequence-list'].resizeHeaders()
-        }
-      }, 100)
-    },
-
     exportStatisticsToCsv () {
       const nameData = [
         moment().format('YYYYMMDD'),
@@ -306,7 +312,7 @@ export default {
       if (this.currentEpisode) {
         nameData.splice(2, 0, this.currentEpisode.name)
       }
-      const name = slugify(nameData.join('_'))
+      const name = stringHelpers.slugify(nameData.join('_'))
       csv.generateStatReports(
         name,
         this.sequenceStats,
@@ -326,7 +332,7 @@ export default {
       if (!this.isTVShow) {
         this.initSequences()
           .then(this.handleModalsDisplay)
-          .then(this.resizeHeaders)
+          .catch(err => console.error(err))
       }
     },
 
@@ -335,32 +341,16 @@ export default {
         this.loadShots(() => {
           this.initSequences()
             .then(this.handleModalsDisplay)
-            .then(this.resizeHeaders)
             .then(() => {
               this.initialLoading = false
             })
+            .catch(err => console.error(err))
         })
       }
     },
 
     searchSequenceFilters () {
       this.computeSequenceStats()
-    }
-  },
-
-  socket: {
-    events: {
-      'comment:new' (eventData) {
-        /*
-        const commentId = eventData.comment_id
-        this.loadComment({
-          commentId,
-          callback: (comment) => {
-            this.computeSequenceStats()
-          }
-        })
-        */
-      }
     }
   },
 

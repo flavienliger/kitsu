@@ -84,6 +84,7 @@ import {
 
   SET_ASSET_TYPE_SEARCH,
   COMPUTE_ASSET_TYPE_STATS,
+  UPDATE_METADATA_DESCRIPTOR_END,
 
   CHANGE_ASSET_SORT,
 
@@ -167,6 +168,7 @@ const helpers = {
 
     const taskIds = []
     asset.tasks.forEach((task) => {
+      asset.full_name = `${asset.asset_type_name} / ${asset.name}`
       helpers.populateTask(task, asset)
 
       if (task.assignees.length > 1) {
@@ -606,6 +608,18 @@ const actions = {
     commit(CHANGE_ASSET_SORT, {
       taskStatusMap, taskTypeMap, taskMap, production, persons, sorting
     })
+  },
+
+  deleteAllAssetTasks (
+    { commit, dispatch, state }, { projectId, taskTypeId, selectionOnly }
+  ) {
+    let taskIds = []
+    if (selectionOnly) {
+      taskIds = cache.result
+        .filter(a => a.validations[taskTypeId])
+        .map(a => a.validations[taskTypeId])
+    }
+    return dispatch('deleteAllTasks', { projectId, taskTypeId, taskIds })
   }
 }
 
@@ -675,6 +689,7 @@ const mutations = {
       if (!isTime && asset.timeSpent > 0) isTime = true
       if (!isDescription && asset.description) isDescription = true
     })
+
     const assetTypes = Object.values(assetTypeMap)
     cache.assetTypeIndex = buildNameIndex(assetTypes)
     const displayedAssets = cache.assets.slice(0, PAGE_SIZE)
@@ -1001,6 +1016,18 @@ const mutations = {
       persons,
       sorting
     })
+  },
+
+  [UPDATE_METADATA_DESCRIPTOR_END] (
+    state, { descriptor, previousDescriptorFieldName }
+  ) {
+    if (descriptor.entity_type === 'Asset' && previousDescriptorFieldName) {
+      cache.assets.forEach((asset) => {
+        asset.data[descriptor.field_name] =
+          asset.data[previousDescriptorFieldName]
+        delete asset.data[previousDescriptorFieldName]
+      })
+    }
   },
 
   [RESET_ALL] (state) {

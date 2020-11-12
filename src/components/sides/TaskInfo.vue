@@ -84,68 +84,31 @@
       <div class="task-column preview-column" v-if="isPreview">
         <div class="preview-column-content">
           <div class="preview">
-            <div class="preview-picture">
-              <div
-                v-if="isMoviePreview"
-              >
-                <video-player
-                  :preview="currentPreview"
-                  :entity-preview-files="taskEntityPreviews"
-                  :last-preview-files="lastFiveMoviePreviews"
-                  :task-type-map="taskTypeMap"
-                  :light="!isWide"
-                  :read-only="!isCurrentUserManager"
-                  @annotationchanged="onAnnotationChanged"
-                  @change-current-preview="changeCurrentPreview"
-                  ref="preview-movie"
-                />
-              </div>
-
-              <div
-                class="preview-standard-file"
-                v-else-if="isStandardPreview"
-              >
-                <a
-                  class="button"
-                  ref="preview-file"
-                  :href="currentPreviewDlPath"
-                >
-                  <download-icon class="icon" />
-                  <span class="text">
-                    {{ $t('tasks.download_pdf_file', {extension}) }}
-                  </span>
-                </a>
-              </div>
-
-              <model-viewer
-                class="model-viewer"
-                :preview-url="currentPreviewPath"
-                :preview-dl-path="currentPreviewDlPath"
-                :light="!isWide"
-                v-else-if="is3DModelPreview"
-              />
-
-              <picture-viewer
-                :preview="currentPreview"
-                :last-preview-files="lastFivePicturePreviews"
+            <div
+              v-if="taskPreviews && taskPreviews.length > 0"
+            >
+              <preview-player
+                :entity-preview-files="taskEntityPreviews"
+                :last-preview-files="lastFivePreviews"
+                :previews="currentPreview.previews"
+                :task-type-map="taskTypeMap"
                 :light="!isWide"
                 :read-only="!isCurrentUserManager"
                 @annotation-changed="onAnnotationChanged"
-                @add-preview="onAddExtraPreview"
-                @remove-extra-preview="onRemoveExtraPreview"
                 @change-current-preview="changeCurrentPreview"
-                ref="preview-picture"
-                v-else-if="isPicturePreview"
+                @add-extra-preview="onAddExtraPreview"
+                @remove-extra-preview="onRemoveExtraPreview"
+                ref="preview-player"
               />
-              <div
-                class="no-preview"
-                v-if="!taskPreviews || taskPreviews.length === 0"
-              >
-                <em>{{ $t('tasks.no_preview') }}</em>
-              </div>
+            </div>
+
+            <div
+              class="no-preview"
+              v-if="!taskPreviews || taskPreviews.length === 0"
+            >
+              <em>{{ $t('tasks.no_preview') }}</em>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -265,9 +228,6 @@
 <script>
 import { mapGetters, mapActions } from 'vuex'
 import {
-  DownloadIcon
-} from 'vue-feather-icons'
-import {
   getTaskEntityPath,
   getTaskPath
 } from '../../lib/path'
@@ -281,13 +241,11 @@ import ButtonSimple from '../widgets/ButtonSimple'
 import Comment from '../widgets/Comment'
 import DeleteModal from '../modals/DeleteModal'
 import EditCommentModal from '../modals/EditCommentModal'
-import ModelViewer from '../previews/ModelViewer'
-import PictureViewer from '../previews/PictureViewer'
 import Spinner from '../widgets/Spinner'
 import SubscribeButton from '../widgets/SubscribeButton'
 import TaskTypeName from '../widgets/TaskTypeName'
 import ValidationTag from '../widgets/ValidationTag'
-import VideoPlayer from '../previews/VideoPlayer'
+import PreviewPlayer from '../previews/PreviewPlayer'
 
 export default {
   name: 'task-info',
@@ -296,16 +254,13 @@ export default {
     AddPreviewModal,
     ButtonSimple,
     Comment,
-    DownloadIcon,
     DeleteModal,
     EditCommentModal,
-    ModelViewer,
-    PictureViewer,
+    PreviewPlayer,
     Spinner,
     SubscribeButton,
     TaskTypeName,
-    ValidationTag,
-    VideoPlayer
+    ValidationTag
   },
 
   props: {
@@ -386,7 +341,6 @@ export default {
       'getTaskComment',
       'getTaskComments',
       'getTaskPreviews',
-      'isCurrentUserCGArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'isSingleEpisode',
@@ -539,24 +493,6 @@ export default {
       }
     },
 
-    lastFiveMoviePreviews () {
-      if (this.taskPreviews) {
-        const isMovie = previewFile => previewFile.extension === 'mp4'
-        return this.taskPreviews.filter(isMovie).slice(0, 5)
-      } else {
-        return []
-      }
-    },
-
-    lastFivePicturePreviews () {
-      if (this.taskPreviews) {
-        const isPicture = previewFile => previewFile.extension === 'png'
-        return this.taskPreviews.filter(isPicture).slice(0, 5)
-      } else {
-        return []
-      }
-    },
-
     panelStyle () {
       return {
         width: this.isWide ? 700 : 350
@@ -566,6 +502,10 @@ export default {
     pinnedCount () {
       if (!this.taskComments) return 0
       return this.taskComments.filter(c => c.pinned).length
+    },
+
+    previewPlayer () {
+      return this.$refs['preview-player']
     }
   },
 
@@ -596,24 +536,18 @@ export default {
         this.errors.task = false
         this.loadTaskComments({
           taskId: this.task.id,
-          entityId: this.task.entity_id,
-          callback: (err) => {
-            if (err) {
-              console.error(err)
-              this.errors.task = true
-            } else {
-              this.loadTaskSubscribed({
-                taskId: this.task.id,
-                callback: (err, subscribed) => {
-                  if (err) console.error(err)
-                  this.loading.task = false
-                  this.reset()
-                  this.isSubscribed = subscribed
-                }
-              })
-            }
-          }
+          entityId: this.task.entity_id
         })
+          .then(() => this.loadTaskSubscribed({ taskId: this.task.id }))
+          .then(subscribed => {
+            this.loading.task = false
+            this.reset()
+            this.isSubscribed = subscribed
+          })
+          .catch(err => {
+            console.error(err)
+            this.errors.task = true
+          })
       }
     },
 
@@ -707,7 +641,7 @@ export default {
           this.$refs['add-extra-preview-modal'].reset()
           this.reset()
           setTimeout(() => {
-            this.$refs['preview-picture'].displayLast()
+            this.$refs['preview-player'].displayLast()
           }, 0)
           this.modals.addExtraPreview = false
         })
@@ -801,8 +735,7 @@ export default {
       this.setPreview({
         taskId: this.task.id,
         entityId: this.task.entity.id,
-        previewId: this.currentPreviewId,
-        callback: () => {}
+        previewId: this.currentPreviewId
       })
     },
 
@@ -873,17 +806,18 @@ export default {
 
       this.deleteTaskComment({
         taskId: this.task.id,
-        commentId,
-        callback: (err) => {
-          this.loading.deleteComment = false
-          if (err) {
-            this.errors.deleteComment = true
-          } else {
-            this.reset()
-            this.modals.deleteComment = false
-          }
-        }
+        commentId
       })
+        .then(() => {
+          this.reset()
+          this.loading.deleteComment = false
+          this.modals.deleteComment = false
+        })
+        .catch((err) => {
+          console.error(err)
+          this.loading.deleteComment = false
+          this.errors.deleteComment = true
+        })
     },
 
     confirmEditTaskComment (comment) {
@@ -891,16 +825,17 @@ export default {
       this.errors.editComment = false
       this.editTaskComment({
         taskId: this.task.id,
-        comment,
-        callback: (err) => {
-          this.loading.editComment = false
-          if (err) {
-            this.errors.editComment = true
-          } else {
-            this.modals.editComment = false
-          }
-        }
+        comment
       })
+        .then(() => {
+          this.loading.editComment = false
+          this.modals.editComment = false
+        })
+        .catch((err) => {
+          console.error(err)
+          this.loading.editComment = false
+          this.errors.editComment = true
+        })
     },
 
     getCurrentTaskComments () {
@@ -915,7 +850,7 @@ export default {
         return comment.previews.findIndex((p) => p.id === previewId) >= 0
       })
 
-      this.$refs['preview-picture'].displayFirst()
+      this.previewPlayer.displayFirst()
       this.deleteTaskPreview({
         taskId: this.task.id,
         commentId: comment.id,
@@ -985,15 +920,6 @@ export default {
             taskId: this.task.id,
             previewId: eventData.preview_file_id
           }).then(() => {
-            if (this.$refs['preview-movie']) {
-              if (!this.$refs['preview-movie'].isDrawing) {
-                this.$refs['preview-movie'].reloadAnnotations()
-              }
-            } else if (this.$refs['preview-picture']) {
-              if (!this.$refs['preview-picture'].isDrawing) {
-                this.$refs['preview-picture'].reloadAnnotations()
-              }
-            }
           })
         }
       },
@@ -1023,10 +949,6 @@ export default {
 
   .no-preview {
     padding: 0.5em;
-  }
-
-  .preview-picture {
-    border: 1px solid $dark-grey;
   }
 
   .side {

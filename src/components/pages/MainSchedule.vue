@@ -43,12 +43,13 @@
     </div>
 
     <schedule
-      :start-date="startDate"
       :end-date="endDate"
       :hierarchy="scheduleItems"
-      :zoom-level="zoomLevel"
       :is-loading="loading.schedule"
       :is-error="errors.schedule"
+      :start-date="startDate"
+      :with-milestones="false"
+      :zoom-level="zoomLevel"
       @item-changed="onScheduleItemChanged"
       @change-zoom="changeZoom"
       @root-element-expanded="expandProductionElement"
@@ -208,11 +209,9 @@ export default {
         this.saveScheduleItem(item)
       } else {
         this.editProduction({
-          data: {
-            id: item.id,
-            start_date: item.startDate.format('YYYY-MM-DD'),
-            end_date: item.endDate.format('YYYY-MM-DD')
-          }
+          id: item.id,
+          start_date: item.startDate.format('YYYY-MM-DD'),
+          end_date: item.endDate.format('YYYY-MM-DD')
         })
       }
     }

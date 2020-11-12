@@ -117,8 +117,10 @@ import {
   COMPUTE_SEQUENCE_STATS,
   COMPUTE_EPISODE_STATS,
   SET_EPISODE_STATS,
+  SET_EPISODE_RETAKE_STATS,
 
   CHANGE_SHOT_SORT,
+  UPDATE_METADATA_DESCRIPTOR_END,
 
   RESET_ALL
 } from '../mutation-types'
@@ -296,6 +298,19 @@ const helpers = {
       shotSearchText: shotSearch,
       shotSelectionGrid: buildSelectionGrid(maxX, maxY)
     })
+  },
+
+  sortStatColumns (stats, taskTypeMap) {
+    const validationColumnsMap = {}
+    if (stats.all) {
+      Object.keys(stats.all).forEach(entryId => {
+        if (entryId !== 'all' && !stats.all[entryId].name) {
+          validationColumnsMap[entryId] = true
+        }
+      })
+    }
+    const validationColumns = Object.keys(validationColumnsMap)
+    return sortValidationColumns(validationColumns, taskTypeMap)
   }
 }
 
@@ -309,6 +324,7 @@ const initialState = {
   sequenceSearchText: '',
   sequenceStats: {},
   episodeSearchText: '',
+  episodeRetakeStats: {},
   episodeStats: {},
   shotSorting: [],
   shotsBySequence: {},
@@ -362,6 +378,7 @@ const getters = {
   sequenceStats: state => state.sequenceStats,
   episodes: state => state.episodes,
   episodeMap: state => state.episodeMap,
+  episodeRetakeStats: state => state.episodeRetakeStats,
   episodeStats: state => state.episodeStats,
   shotValidationColumns: state => state.shotValidationColumns,
 
@@ -481,14 +498,14 @@ const actions = {
     commit(CLEAR_EPISODES)
   },
 
-  loadEpisodes ({ commit, state, rootGetters }, callback) {
+  loadEpisodes ({ commit, state, rootGetters }) {
     const currentProduction = rootGetters.currentProduction
     const routeEpisodeId = rootGetters.route.params.episode_id
-    shotsApi.getEpisodes(currentProduction, (err, episodes) => {
-      if (err) console.error(err)
-      commit(LOAD_EPISODES_END, { episodes, routeEpisodeId })
-      if (callback) callback()
-    })
+    return shotsApi.getEpisodes(currentProduction)
+      .then(episodes => {
+        commit(LOAD_EPISODES_END, { episodes, routeEpisodeId })
+        return Promise.resolve(episodes)
+      })
   },
 
   loadShots ({ commit, dispatch, state, rootGetters }, callback) {
@@ -864,32 +881,43 @@ const actions = {
   },
 
   initEpisodes ({ commit, dispatch, state, rootState, rootGetters }) {
-    return new Promise((resolve, reject) => {
-      const productionId = rootState.route.params.production_id
-      const isTVShow = rootGetters.isTVShow
-      dispatch('setLastProductionScreen', 'episodes')
-
-      if (state.episodes.length === 0 ||
-          state.episodes[0].production_id !== productionId) {
-        if (isTVShow) {
-          dispatch('loadEpisodes', () => {
+    const productionId = rootState.route.params.production_id
+    const isTVShow = rootGetters.isTVShow
+    dispatch('setLastProductionScreen', 'episodes')
+    if (state.episodes.length === 0 ||
+        state.episodes[0].production_id !== productionId) {
+      if (isTVShow) {
+        return dispatch('loadEpisodes')
+          .then(() => {
             return dispatch('loadEpisodeStats', productionId)
           })
-        } else {
-          dispatch('computeEpisodeStats')
-          resolve()
-        }
+          .then(() => {
+            return dispatch('loadEpisodeRetakeStats', productionId)
+          })
+      } else {
+        return dispatch('computeEpisodeStats')
       }
-    })
+    }
   },
 
   loadEpisodeStats ({ commit, rootGetters }, productionId) {
     const taskTypeMap = rootGetters.taskTypeMap
     commit(SET_EPISODE_STATS, { episodeStats: {}, taskTypeMap })
     return shotsApi.getEpisodeStats(productionId)
-      .then((episodeStats) => {
+      .then(episodeStats => {
         commit(SET_EPISODE_STATS, { episodeStats, taskTypeMap })
-        return Promise.resolve()
+        return Promise.resolve(episodeStats)
+      })
+      .catch(console.error)
+  },
+
+  loadEpisodeRetakeStats ({ commit, rootGetters }, productionId) {
+    const taskTypeMap = rootGetters.taskTypeMap
+    commit(SET_EPISODE_RETAKE_STATS, { episodeRetakeStats: {}, taskTypeMap })
+    return shotsApi.getEpisodeRetakeStats(productionId)
+      .then(episodeRetakeStats => {
+        commit(SET_EPISODE_RETAKE_STATS, { episodeRetakeStats, taskTypeMap })
+        return Promise.resolve(episodeRetakeStats)
       })
       .catch(console.error)
   },
@@ -915,17 +943,21 @@ const actions = {
 
   getShotsCsvLines ({ state, rootGetters }) {
     const production = rootGetters.currentProduction
+    const isTVShow = rootGetters.isTVShow
     const organisation = rootGetters.organisation
+    const personMap = rootGetters.personMap
     let shots = cache.shots
     if (cache.result && cache.result.length > 0) {
       shots = cache.result
     }
     const lines = shots.map((shot) => {
-      const shotLine = [
+      let shotLine = []
+      if (isTVShow) shotLine.push(shot.episode_name)
+      shotLine = shotLine.concat([
         shot.sequence_name,
         shot.name,
         shot.description
-      ]
+      ])
       sortByName([...production.descriptors])
         .filter(d => d.entity_type === 'Shot')
         .forEach((descriptor) => {
@@ -939,12 +971,16 @@ const actions = {
       if (state.isFrameOut) shotLine.push(shot.data.frame_out)
       if (state.isFps) shotLine.push(shot.data.fps)
       state.shotValidationColumns
-        .forEach((validationColumn) => {
+        .forEach(validationColumn => {
           const task = rootGetters.taskMap[shot.validations[validationColumn]]
           if (task) {
             shotLine.push(task.task_status_short_name)
+            shotLine.push(
+              task.assignees.map(id => personMap[id].full_name).join(',')
+            )
           } else {
-            shotLine.push('')
+            shotLine.push('') // Status
+            shotLine.push('') // Assignations
           }
         })
       return shotLine
@@ -1039,6 +1075,18 @@ const actions = {
     commit(CHANGE_SHOT_SORT, {
       taskStatusMap, taskTypeMap, taskMap, persons, production, sorting
     })
+  },
+
+  deleteAllShotTasks (
+    { commit, dispatch, state }, { projectId, taskTypeId, selectionOnly }
+  ) {
+    let taskIds = []
+    if (selectionOnly) {
+      taskIds = cache.result
+        .filter(a => a.validations[taskTypeId])
+        .map(a => a.validations[taskTypeId])
+    }
+    return dispatch('deleteAllTasks', { projectId, taskTypeId, taskIds })
   }
 }
 
@@ -1113,6 +1161,7 @@ const mutations = {
       let timeSpent = 0
       shot.project_name = production.name
       shot.production_id = production.id
+      shot.full_name = helpers.getShotName(shot)
       shot.tasks.forEach((task) => {
         helpers.populateTask(task, shot, production)
         timeSpent += task.duration
@@ -1601,19 +1650,15 @@ const mutations = {
   },
 
   [SET_EPISODE_STATS] (state, { episodeStats, taskTypeMap }) {
-    const validationColumnsMap = {}
-    if (episodeStats.all) {
-      Object.keys(episodeStats.all).forEach((entryId) => {
-        if (entryId !== 'all' && !episodeStats.all[entryId].name) {
-          validationColumnsMap[entryId] = true
-        }
-      })
-    }
+    state.episodeValidationColumns =
+      helpers.sortStatColumns(episodeStats, taskTypeMap)
     state.episodeStats = episodeStats
-    const validationColumns = Object.keys(validationColumnsMap)
-    state.episodeValidationColumns = sortValidationColumns(
-      validationColumns, taskTypeMap
-    )
+  },
+
+  [SET_EPISODE_RETAKE_STATS] (state, { episodeRetakeStats, taskTypeMap }) {
+    // state.episodeValidationColumns =
+    //   helpers.sortStatColumns(episodeRetakeStats, taskTypeMap)
+    state.episodeRetakeStats = episodeRetakeStats
   },
 
   [COMPUTE_SEQUENCE_STATS] (state, { taskMap, taskStatusMap }) {
@@ -1758,10 +1803,12 @@ const mutations = {
   },
 
   [REMOVE_SHOT] (state, shotToDelete) {
+    delete state.shotMap[shotToDelete.id]
     cache.shots = removeModelFromList(cache.shots, shotToDelete)
+    cache.result = removeModelFromList(cache.result, shotToDelete)
+    cache.shotIndex = buildShotIndex(cache.shots)
     state.displayedShots =
       removeModelFromList(state.displayedShots, shotToDelete)
-    delete state.shotMap[shotToDelete.id]
     if (shotToDelete.timeSpent) {
       state.displayedShotsTimeSpent -= shotToDelete.timeSpent
     }
@@ -1788,6 +1835,18 @@ const mutations = {
       taskTypeMap,
       taskMap
     })
+  },
+
+  [UPDATE_METADATA_DESCRIPTOR_END] (
+    state, { descriptor, previousDescriptorFieldName }
+  ) {
+    if (descriptor.entity_type === 'Shot' && previousDescriptorFieldName) {
+      cache.shots.forEach((shot) => {
+        shot.data[descriptor.field_name] =
+          shot.data[previousDescriptorFieldName]
+        delete shot.data[previousDescriptorFieldName]
+      })
+    }
   },
 
   [RESET_ALL] (state) {

@@ -44,6 +44,7 @@
           :disabled="isLoading"
           v-model="text"
           @keyup.enter.ctrl="runAddComment(text, attachment, checklist, task_status_id)"
+          @keyup.enter.meta="runAddComment(text, attachment, checklist, task_status_id)"
           v-focus>
         </textarea>
       </at-ta>
@@ -122,12 +123,12 @@
         <em>{{ $t('comments.error') }}</em>
       </div>
     </div>
+
     <add-comment-image-modal
       ref="add-comment-image-modal"
       :active="modals.addCommentAttachment"
       :is-loading="loading.addCommentAttachment"
       :is-error="errors.addCommentAttachment"
-      extensions=".png,.jpg,.jpeg,.gif"
       @cancel="onCloseCommentAttachment"
       @confirm="createCommentAttachment"
     />

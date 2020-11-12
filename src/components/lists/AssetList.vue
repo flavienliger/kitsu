@@ -182,6 +182,7 @@
               <router-link
                 class="asset-link"
                 :to="assetPath(asset.id)"
+                :title="asset.full_name"
               >
                 {{ asset.name }}
               </router-link>
@@ -524,7 +525,7 @@ export default {
 }
 
 .actions {
-  min-width: 150px;
+    min-width: 160px;
   padding: 0.4em;
 }
 

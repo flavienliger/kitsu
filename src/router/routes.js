@@ -37,6 +37,7 @@ const ProductionSettings = () => import('../components/pages/ProductionSettings'
 const Profile = () => import('../components/pages/Profile')
 const ResetPassword = () => import('../components/pages/ResetPassword')
 const ResetChangePassword = () => import('../components/pages/ResetChangePassword')
+const Logs = () => import('../components/pages/Logs')
 const ServerDown = () => import('../components/pages/ServerDown')
 const Settings = () => import('../components/pages/Settings')
 const Sequences = () => import('../components/pages/Sequences')
@@ -76,7 +77,7 @@ export const routes = [
               if (err) {
                 next({ name: 'server-down' })
               } else {
-                if (!userStore.getters.isCurrentUserCGArtist(userStore.state)) {
+                if (!userStore.getters.isCurrentUserArtist(userStore.state)) {
                   next({ name: 'open-productions' })
                 } else {
                   next({ name: 'todos' })
@@ -84,7 +85,7 @@ export const routes = [
               }
             })
           } else {
-            if (!userStore.getters.isCurrentUserCGArtist(userStore.state)) {
+            if (!userStore.getters.isCurrentUserArtist(userStore.state)) {
               store.commit('DATA_LOADING_END')
               next({ name: 'open-productions' })
             } else {
@@ -264,6 +265,12 @@ export const routes = [
             name: 'timesheets-day-person'
           }
         ]
+      },
+
+      {
+        path: '/logs',
+        component: Logs,
+        name: 'logs'
       },
 
       {

@@ -17,6 +17,12 @@
       <span class="filler"></span>
       <button-simple
         class="flexrow-item"
+        icon="refresh"
+        :title="$t('main.reload')"
+        @click="reset"
+      />
+      <button-simple
+        class="flexrow-item"
         icon="download"
         @click="exportStatisticsToCsv"
       />
@@ -40,7 +46,7 @@
 import moment from 'moment'
 import { mapGetters, mapActions } from 'vuex'
 import csv from '../../lib/csv'
-import { slugify } from '../../lib/string'
+import stringHelpers from '../../lib/string'
 import ButtonSimple from '../widgets/ButtonSimple'
 import Combobox from '../widgets/Combobox'
 import ProductionAssetTypeList from '../lists/ProductionAssetTypeList.vue'
@@ -102,7 +108,6 @@ export default {
       'computeAssetTypeStats',
       'initAssetTypes',
       'loadAssets',
-      'loadComment',
       'setAssetTypeSearch',
       'setAssetTypeListScrollPosition',
       'setLastProductionScreen'
@@ -145,7 +150,7 @@ export default {
       if (this.currentEpisode) {
         nameData.splice(2, 0, this.currentEpisode.name)
       }
-      const name = slugify(nameData.join('_'))
+      const name = stringHelpers.slugify(nameData.join('_'))
       csv.generateStatReports(
         name,
         this.assetTypeStats,
@@ -176,20 +181,6 @@ export default {
 
     currentEpisode () {
       if (this.isTVShow) this.reset()
-    }
-  },
-
-  socket: {
-    events: {
-      'comment:new' (eventData) {
-        const commentId = eventData.comment_id
-        this.loadComment({
-          commentId,
-          callback: () => {
-            this.computeAssetTypeStats()
-          }
-        })
-      }
     }
   },
 

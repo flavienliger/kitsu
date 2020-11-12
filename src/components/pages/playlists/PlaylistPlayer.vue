@@ -9,7 +9,10 @@
   }"
 >
   <div class="playlist-header flexrow" ref="header" v-if="!tempMode">
-    <div class="flexrow-item for-client" v-if="playlist && playlist.for_client">
+    <div
+      class="flexrow-item for-client"
+      v-if="playlist && playlist.for_client"
+    >
       {{ $t('playlists.client_playlist') }}
     </div>
     <span class="flexrow-item playlist-name">
@@ -53,7 +56,7 @@
       @entity-change="onPlayerEntityChange"
       @time-update="onTimeUpdate"
       @max-duration-update="onMaxDurationUpdate"
-      v-show="isCurrentEntityMovie && !isLoading"
+      v-show="isCurrentPreviewMovie && !isLoading"
     />
     <raw-video-player
       ref="raw-player-comparison"
@@ -62,22 +65,22 @@
       :is-repeating="isRepeating"
       :muted="true"
       name="comparison"
-      v-show="isComparing && isMovieComparison && !isLoading"
+      v-show="isComparing && isCurrentPreviewMovie && isMovieComparison && !isLoading"
     />
 
     <p
       :style="{width: '100%'}"
       class="preview-standard-file has-text-centered"
-      v-if="isCurrentEntityFile && currentEntity.preview_file_extension && !isLoading"
+      v-show="isCurrentPreviewFile && !isLoading"
     >
       <a
         class="button"
         ref="preview-file"
-        :href="currentEntityDlPath"
+        :href="currentPreviewDlPath"
       >
         <download-icon class="icon" />
         <span class="text">
-          {{ $t('tasks.download_pdf_file', {extension: currentEntity.preview_file_extension}) }}
+          {{ $t('tasks.download_pdf_file', {extension: extension}) }}
         </span>
       </a>
     </p>
@@ -85,25 +88,40 @@
     <div
       class="picture-preview-wrapper"
       ref="picture-player-wrapper"
-      v-show="isCurrentEntityPicture && !isLoading"
+      v-show="isCurrentPreviewPicture && !isLoading"
     >
        <img
          ref="picture-player"
+         id="picture-player"
          class="picture-preview"
-         :src="currentEntityPicturePath"
-         v-show="isCurrentEntityPicture"
+         :src="currentPreviewPath"
+         v-show="isCurrentPreviewPicture"
        />
     </div>
     <div
       class="picture-preview-comparison-wrapper"
-      v-show="isComparing && isPictureComparison && !isLoading"
+      v-show="
+        isComparing &&
+        !isLoading &&
+        !isCurrentPreviewFile &&
+        (
+          (isCurrentPreviewMovie && !isMovieComparison) ||
+          !isCurrentPreviewMovie
+        )
+      "
     >
        <img
          ref="picture-player-comparison"
          class="picture-preview"
-         :src="currentComparisonEntityPicturePath"
+         :src="currentComparisonPreviewPath"
          v-show="isComparing && isPictureComparison"
        />
+       <span
+         class="picture-preview"
+         v-show="isComparing && !isPictureComparison"
+       >
+         It's not a picture preview
+       </span>
     </div>
     <div class="loading-wrapper" v-if="isLoading">
       <spinner />
@@ -112,7 +130,7 @@
     <div
       class="canvas-wrapper"
       ref="canvas-wrapper"
-      v-show="!isCurrentEntityFile"
+      v-show="!isCurrentPreviewFile"
     >
       <canvas
         id="playlist-annotation-canvas"
@@ -136,7 +154,7 @@
   <div
     class="playlist-progress"
     ref="playlist-progress"
-    v-show="isCurrentEntityMovie && !isAddingEntity"
+    v-show="isCurrentPreviewMovie && !isAddingEntity"
   >
     <div class="video-progress">
       <progress
@@ -159,7 +177,7 @@
     :annotations="annotations"
     :max-duration-raw="maxDurationRaw"
     @select-annotation="loadAnnotation"
-    v-show="isCurrentEntityMovie && playlist.id && !isAddingEntity"
+    v-show="isCurrentPreviewMovie && playlist.id && !isAddingEntity"
   />
 
   <div
@@ -179,48 +197,59 @@
       :title="$t('playlists.actions.next_shot')"
       icon="forward"
     />
-    <span class="flexrow-item time-indicator">
+    <span
+      class="flexrow-item time-indicator"
+      :title="$t('playlists.actions.entity_index')"
+    >
       {{ entityList.length > 0 ? playingEntityIndex + 1 : 0 }}
     </span>
     <span class="flexrow-item time-indicator">
     /
     </span>
-    <span class="flexrow-item time-indicator mr1">
+    <span
+      class="flexrow-item time-indicator"
+      :title="$t('playlists.actions.entities_number')"
+    >
       {{ entityList.length }}
     </span>
+
     <div class="separator"></div>
 
     <div
       class="flexrow flexrow-item"
-      v-if="isCurrentEntityPicture"
+      v-if="currentEntityPreviewLength > 1"
     >
       <button-simple
         class="button playlist-button flexrow-item"
         icon="left"
-        @click="onPreviousPictureClicked"
+        :title="$t('playlists.actions.files_previous')"
+        @click="onPreviousPreviewClicked"
       />
       <span
-        class=""
+        class="ml05 mr05"
+        :title="$t('playlists.actions.files_position')"
       >
-        {{ currentEntityPictureIndex + 1 }} / {{ currentPicturePreviewLength }}
+        {{ currentPreviewIndex + 1 }} / {{ currentEntityPreviewLength }}
       </span>
       <button-simple
         class="button playlist-button flexrow-item"
         icon="right"
-        @click="onNextPictureClicked"
+        :title="$t('playlists.actions.files_next')"
+        @click="onNextPreviewClicked"
       />
       <a
         class="button playlist-button flexrow-item"
-        :href="currentEntityPicturePath"
+        :href="currentPreviewPath"
+        :title="$t('playlists.actions.see_original_file')"
         target="blank"
       >
-        <arrow-up-right-icon class="icon" />
+        <arrow-up-right-icon class="icon is-small" />
       </a>
     </div>
 
     <div
       class="flexrow flexrow-item"
-      v-if="isCurrentEntityMovie"
+      v-if="isCurrentPreviewMovie"
     >
       <button-simple
         class="button playlist-button flexrow-item"
@@ -258,29 +287,33 @@
         v-else
       />
 
-      <button
-        :class="{
-          button: true,
-          'flexrow-item': true,
-          'playlist-button': true,
-          active: isRepeating
-        }"
+      <button-simple
+        class="button playlist-button flexrow-item"
+        :active="isRepeating"
+        :title="$t('playlists.actions.looping')"
+        icon="repeat"
         @click="onRepeatClicked"
-      >
-        <repeat-icon class="icon is-small" style="margin-top: 1px"/>
-      </button>
+      />
 
-      <span class="flexrow-item time-indicator">
+      <span
+        class="flexrow-item time-indicator"
+        :title="$t('playlists.actions.current_time')"
+      >
         {{ currentTime }}
       </span>
       <span class="flexrow-item time-indicator">
       /
-
       </span>
-      <span class="flexrow-item time-indicator">
+      <span
+        class="flexrow-item time-indicator"
+        :title="$t('playlists.actions.max_duration')"
+      >
         {{ maxDuration }}
       </span>
-      <span class="flexrow-item time-indicator mr1">
+      <span
+        class="flexrow-item time-indicator mr1"
+        :title="$t('playlists.actions.frame_number')"
+      >
         ({{ currentFrame }})
       </span>
       <button-simple
@@ -299,7 +332,7 @@
 
     <div
       class="flexrow flexrow-item"
-      v-if="isCurrentEntityMovie || isCurrentEntityPicture"
+      v-if="isCurrentPreviewMovie || isCurrentPreviewPicture"
     >
       <button-simple
         :class="{
@@ -311,7 +344,7 @@
         :title="$t('playlists.actions.split_screen')"
         icon="compare"
         @click="onCompareClicked"
-        v-if="taskTypeOptions"
+        v-if="taskTypeOptions && taskTypeOptions.length > 0"
       />
       <combobox
         class="playlist-button flexrow-item comparison-list"
@@ -324,9 +357,8 @@
     <div
       class="flexrow flexrow-item"
       v-if="
-        isComparing && currentPreviewToCompare &&
-        currentPreviewToCompare.extension === 'png' &&
-        currentComparisonPicturePreviewLength > 1
+        isComparing && currentRevisionToCompare &&
+        currentComparisonPreviewLength > 1
       "
     >
       <button-simple
@@ -334,7 +366,7 @@
         icon="left"
         @click="onPreviousComparisonPictureClicked"
       />
-      {{ currentComparisonEntityPictureIndex + 1 }} / {{ currentComparisonPicturePreviewLength }}
+      {{ currentComparisonPreviewIndex + 1 }} / {{ currentComparisonPreviewLength }}
       <button-simple
         class="button playlist-button flexrow-item"
         icon="right"
@@ -353,7 +385,7 @@
     />
     <div
       class="flexrow"
-      v-if="!isCurrentUserCGArtist && (isCurrentEntityMovie || isCurrentEntityPicture)"
+      v-if="!isCurrentUserArtist && (isCurrentPreviewMovie || isCurrentPreviewPicture)"
     >
       <div
         class="separator"
@@ -426,7 +458,7 @@
           'flexrow-item': true,
           active: isDrawing
         }"
-        :title="$t('playlists.actions.annotation')"
+        :title="$t('playlists.actions.annotation_draw')"
         @click="onAnnotateClicked"
         icon="pencil"
       />
@@ -606,7 +638,7 @@
 import moment from 'moment-timezone'
 import { mapActions, mapGetters } from 'vuex'
 import { fabric } from 'fabric'
-import { ArrowUpRightIcon, DownloadIcon, RepeatIcon } from 'vue-feather-icons'
+import { ArrowUpRightIcon, DownloadIcon } from 'vue-feather-icons'
 
 import { formatFrame, formatTime, roundToFrame } from '../../../lib/video'
 import AnnotationBar from './AnnotationBar'
@@ -640,8 +672,7 @@ export default {
     RawVideoPlayer,
     SelectTaskTypeModal,
     Spinner,
-    TaskInfo,
-    RepeatIcon
+    TaskInfo
   },
 
   props: {
@@ -675,8 +706,8 @@ export default {
     return {
       annotations: [],
       color: '#ff3860',
-      currentComparisonEntityPictureIndex: 0,
-      currentEntityPictureIndex: 0,
+      currentComparisonPreviewIndex: 0,
+      currentPreviewIndex: 0,
       currentTime: '00:00.000',
       currentTimeRaw: 0,
       entityList: [],
@@ -730,7 +761,11 @@ export default {
     }
     if (!this.playlist.name) this.isLoading = true
     this.updateProgressBar()
-    if (this.picturePlayer) this.picturePlayer.onload = this.resetPictureCanvas
+    if (this.picturePlayer) {
+      this.picturePlayer.addEventListener('load', () => {
+        this.resetPictureCanvas()
+      })
+    }
     this.$nextTick(() => {
       window.addEventListener('keydown', this.onKeyDown, false)
       window.addEventListener('resize', this.onWindowResize)
@@ -745,7 +780,6 @@ export default {
     window.removeEventListener('keydown', this.onKeyDown)
     window.removeEventListener('resize', this.onWindowResize)
     this.$el.onmousemove = null
-    if (this.picturePlayer) this.picturePlayer.onload = null
   },
 
   computed: {
@@ -753,7 +787,7 @@ export default {
       'assetTaskTypes',
       'currentEpisode',
       'currentProduction',
-      'isCurrentUserCGArtist',
+      'isCurrentUserArtist',
       'isCurrentUserClient',
       'isCurrentUserManager',
       'isTVShow',
@@ -763,25 +797,26 @@ export default {
       'user'
     ]),
 
-    isCurrentEntityMovie () {
-      return (
-        this.currentEntity &&
-        this.currentEntity.preview_file_extension === 'mp4'
-      )
+    extension () {
+      if (!this.currentPreview) return ''
+      if (this.currentPreview.extension) {
+        return this.currentPreview.extension
+      }
+      return ''
     },
 
-    isCurrentEntityPicture () {
-      return (
-        this.currentEntity &&
-        ['png', 'gif'].includes(this.currentEntity.preview_file_extension)
-      )
+    isCurrentPreviewMovie () {
+      return this.extension === 'mp4'
     },
 
-    isCurrentEntityFile () {
+    isCurrentPreviewPicture () {
+      return ['png', 'gif'].includes(this.extension)
+    },
+
+    isCurrentPreviewFile () {
       return (
-        this.currentEntity &&
-        !this.isCurrentEntityMovie &&
-        !this.isCurrentEntityPicture
+        !this.isCurrentPreviewMovie &&
+        !this.isCurrentPreviewPicture
       )
     },
 
@@ -797,7 +832,7 @@ export default {
       )
     },
 
-    currentPreviewToCompare () {
+    currentRevisionToCompare () {
       if (!this.currentEntity) return null
       const previewFiles =
         this.currentEntity.preview_files[this.taskTypeToCompare]
@@ -808,12 +843,22 @@ export default {
       }
     },
 
-    currentEntityPicturePath () {
-      if (this.currentEntity && this.isCurrentEntityPicture) {
-        let previewId = this.currentEntity.preview_file_id
-        let extension = this.currentEntity.preview_file_extension
-        if (this.currentEntityPictureIndex > 0) {
-          const index = this.currentEntityPictureIndex - 1
+    currentPreviewToCompare () {
+      if (!this.currentEntity) return null
+      if (this.currentComparisonPreviewIndex > 0) {
+        const index = this.currentComparisonPreviewIndex - 1
+        return this.currentRevisionToCompare.previews[index]
+      } else {
+        return this.currentRevisionToCompare
+      }
+    },
+
+    currentPreviewPath () {
+      if (this.currentPreview) {
+        let previewId = this.currentPreview.id
+        let extension = this.currentPreview.extension
+        if (this.currentPreviewIndex > 0) {
+          const index = this.currentPreviewIndex - 1
           const preview = this.currentEntity.preview_file_previews[index]
           previewId = preview.id
           extension = preview.extension
@@ -824,39 +869,47 @@ export default {
       }
     },
 
-    currentComparisonEntityPicturePath () {
+    currentComparisonPreviewPath () {
       if (this.currentPreviewToCompare && this.isPictureComparison) {
         const extension = this.currentPreviewToCompare.extension
-        let previewId = this.currentPreviewToCompare.id
-        if (extension === 'png') {
-          if (this.currentComparisonEntityPictureIndex > 0) {
-            const index = this.currentComparisonEntityPictureIndex - 1
-            previewId = this.currentPreviewToCompare.previews[index].id
-          }
-          return `/api/pictures/previews/preview-files/${previewId}.${extension}`
-        } else {
-          return (
-            `/api/pictures/originals/preview-files/${previewId}.${extension}`
-          )
-        }
+        const previewId = this.currentPreviewToCompare.id
+        return `/api/pictures/previews/preview-files/${previewId}.${extension}`
       } else {
         return ''
       }
     },
 
-    currentEntityOriginalPath () {
-      const previewId = this.currentEntity.preview_file_id
-      const extension = this.currentEntity.preview_file_extension
+    currentPreviewOriginalPath () {
+      if (!this.currentPreview) return ''
+      const previewId = this.currentPreview.id
+      const extension = this.currentPreview.extension
       return `/api/pictures/originals/preview-files/${previewId}.${extension}`
     },
 
-    currentEntityDlPath () {
-      const previewId = this.currentEntity.preview_file_id
+    currentPreviewDlPath () {
+      if (!this.currentPreview) return ''
+      const previewId = this.currentPreview.id
       return `/api/pictures/originals/preview-files/${previewId}/download`
     },
 
     currentEntity () {
       return this.entityList[this.playingEntityIndex]
+    },
+
+    currentPreview () {
+      if (!this.currentEntity) return null
+      if (this.currentPreviewIndex === 0) {
+        return {
+          id: this.currentEntity.preview_file_id,
+          extension: this.currentEntity.preview_file_extension,
+          task_id: this.currentEntity.preview_file_task_id,
+          annotations: this.currentEntity.preview_file_annotations || []
+        }
+      } else {
+        return this.currentEntity.preview_file_previews[
+          this.currentPreviewIndex - 1
+        ]
+      }
     },
 
     previousEntityIndex () {
@@ -871,16 +924,16 @@ export default {
       return index
     },
 
-    currentPicturePreviewLength () {
+    currentEntityPreviewLength () {
+      if (!this.currentEntity || !this.currentEntity.preview_file_previews) {
+        return 0
+      }
       return this.currentEntity.preview_file_previews.length + 1
     },
 
-    currentComparisonPicturePreviewLength () {
-      if (
-        this.currentPreviewToCompare &&
-        this.currentPreviewToCompare.extension === 'png'
-      ) {
-        const previews = this.currentPreviewToCompare.previews
+    currentComparisonPreviewLength () {
+      if (this.currentRevisionToCompare) {
+        const previews = this.currentRevisionToCompare.previews
         return previews ? previews.length + 1 : 0
       } else {
         return 0
@@ -1150,6 +1203,7 @@ export default {
         const annotation = this.getAnnotation(0)
         this.loadAnnotation(annotation)
       }
+      this.scrollToEntity(this.playingEntityIndex)
     },
 
     goPreviousFrame () {
@@ -1197,6 +1251,7 @@ export default {
         this.container.msRequestFullscreen()
       }
       this.container.setAttribute('data-fullscreen', !!true)
+      document.activeElement.blur()
     },
 
     exitFullScreen () {
@@ -1210,6 +1265,7 @@ export default {
         document.msExitFullscreen()
       }
       this.container.setAttribute('data-fullscreen', !!false)
+      document.activeElement.blur()
     },
 
     isFullScreen () {
@@ -1243,7 +1299,7 @@ export default {
 
     onPlayPreviousEntityClicked () {
       this.playEntity(this.previousEntityIndex)
-      if (this.isCurrentEntityMovie) {
+      if (this.isCurrentPreviewMovie) {
         this.rawPlayer.loadPreviousEntity()
         if (this.isComparing) {
           this.$refs['raw-player-comparison'].loadPreviousEntity()
@@ -1254,7 +1310,7 @@ export default {
 
     onPlayNextEntityClicked () {
       this.playEntity(this.nextEntityIndex)
-      if (this.isCurrentEntityMovie) {
+      if (this.isCurrentPreviewMovie) {
         this.rawPlayer.loadNextEntity()
         if (this.isComparing) {
           this.$refs['raw-player-comparison'].loadNextEntity()
@@ -1455,7 +1511,7 @@ export default {
     },
 
     onPlayerEntityChange (entityIndex) {
-      if (this.isCurrentEntityMovie) {
+      if (this.isCurrentPreviewMovie) {
         this.playingEntityIndex = entityIndex
         if (this.isComparing) {
           const comparisonIndex = this.rawPlayerComparison.currentIndex
@@ -1467,18 +1523,20 @@ export default {
             this.rawPlayerComparison.play()
           }
         }
-        if (!this.$options.silent) this.scrollToEntity(this.playingEntityIndex)
       }
+      if (!this.$options.silent) this.scrollToEntity(this.playingEntityIndex)
     },
 
     onPreviewChanged (entity, previewFile) {
       this.pause()
-      this.$emit('preview-changed', entity, previewFile.id)
       const localEntity = this.entityList.find(s => s.id === entity.id)
       localEntity.preview_file_id = previewFile.id
+      localEntity.preview_file_task_id = previewFile.task_id
       localEntity.preview_file_extension = previewFile.extension
       localEntity.preview_file_annotations = previewFile.annotations
       if (this.rawPlayer) this.rawPlayer.reloadCurrentEntity()
+      this.$emit('preview-changed', entity, previewFile.id)
+      this.updateTaskPanel()
     },
 
     onEntityDropped (info) {
@@ -1551,18 +1609,24 @@ export default {
     resetCanvasSize () {
       return this.$nextTick()
         .then(() => {
-          if (this.isCurrentEntityMovie && this.fabricCanvas) {
+          if (this.isCurrentPreviewMovie && this.fabricCanvas) {
             if (this.canvas) {
+              // Video Ratio
               const ratio = this.rawPlayer.getVideoRatio()
+
+              // Container size
               const fullWidth = this.rawPlayer.$el.offsetWidth
               const fullHeight = this.rawPlayer.$el.offsetHeight
               const width = ratio ? fullHeight * ratio : fullWidth
+
               if (fullWidth > width) {
+                // Case where canvas is less big than the container
                 const left = Math.round((fullWidth - width) / 2)
                 this.canvas.style.left = left + 'px'
                 this.canvas.style.top = '0px'
                 this.fabricCanvas.setDimensions({ width, height: fullHeight })
               } else {
+                // Case where canvas is bigger than the container
                 const height = ratio ? Math.round(fullWidth / ratio) : fullHeight
                 const top = Math.round((fullHeight - height) / 2)
                 this.canvas.style.left = '0px'
@@ -1570,44 +1634,66 @@ export default {
                 this.fabricCanvas.setDimensions({ width: fullWidth, height })
               }
             }
-          } else if (this.isCurrentEntityPicture && this.fabricCanvas) {
+          } else if (this.isCurrentPreviewPicture && this.fabricCanvas) {
             if (this.canvas) {
+              // Picture ratio
               const naturalWidth = this.picturePlayer.naturalWidth
               const naturalHeight = this.picturePlayer.naturalHeight
               const ratio = naturalWidth / naturalHeight
+
+              // Container size
               let fullWidth = this.$refs['video-container'].offsetWidth
               if (!this.isCommentsHidden) {
                 fullWidth -= 450 // task info widget width
               }
               const fullHeight = this.$refs['video-container'].offsetHeight
+              if (this.isComparing) fullWidth = Math.round(fullWidth / 2)
 
+              // Init canvas values
               let width = ratio ? fullHeight * ratio : fullWidth
               let height = ratio ? Math.round(fullWidth / ratio) : fullHeight
+              let top = 0
+              let left = 0
               this.canvas.style.top = '0px'
               this.canvas.style.left = '0px'
+
+              // Set Canvas width and left position
               if (fullWidth > naturalWidth) {
-                let left = Math.round((fullWidth - naturalWidth) / 2)
-                if (this.isComparing) {
-                  left = left - fullWidth / 4
-                  if (left < 0) left = 0
-                }
+                // Case where picture is less wide than the container
+                // We adapt left position, because there will be margins
+                left = Math.round((fullWidth - naturalWidth) / 2)
                 this.canvas.style.left = left + 'px'
                 width = naturalWidth
               } else if (fullWidth > width) {
+                // Case where canvas is less wide than the container
+                // We adapt left position
                 const left = Math.round((fullWidth - width) / 2)
                 this.canvas.style.left = left + 'px'
               } else {
+                // Case where canvas is wider than the container
+                // We set the width to the container size
                 width = fullWidth
               }
+
+              // Set Canvas height and top position
               if (fullHeight > naturalHeight) {
-                const top = Math.round((fullHeight - naturalHeight) / 2)
+                // Case where picture is less high than the container
+                // We adapt top position, because there will be margins
+                top = Math.round((fullHeight - naturalHeight) / 2)
                 this.canvas.style.top = top + 'px'
                 height = naturalHeight
               } else if (fullHeight > height) {
-                const top = Math.round((fullHeight - height) / 2)
+                // Case where canvas is less high than the container
+                // We adapt top position
+                top = Math.round((fullHeight - height) / 2)
                 this.canvas.style.top = top + 'px'
               } else {
+                // Height is bigger than the container. So we put it
+                // inside the container and adapt width parameters accordingly.
                 height = fullHeight
+                width = Math.round(height * ratio)
+                const left = Math.round((fullWidth - width) / 2)
+                this.canvas.style.left = left + 'px'
               }
               this.fabricCanvas.setDimensions({ width, height })
             }
@@ -1642,13 +1728,15 @@ export default {
 
     rebuildEntityListToCompare () {
       if (this.taskTypeToCompare) {
-        this.entityListToCompare = this.entityList.map((entity) => {
-          const preview = entity.preview_files[this.taskTypeToCompare][0]
-          return ({
-            preview_file_id: preview.id,
-            preview_file_extension: 'mp4'
+        this.entityListToCompare = this.entityList
+          .filter(entity => entity.preview_files[this.taskTypeToCompare])
+          .map((entity) => {
+            const preview = entity.preview_files[this.taskTypeToCompare][0]
+            return ({
+              preview_file_id: preview.id,
+              preview_file_extension: 'mp4'
+            })
           })
-        })
       } else {
         this.buildEntityListToCompare = []
       }
@@ -1802,7 +1890,7 @@ export default {
 
     saveAnnotations () {
       let currentTime = roundToFrame(this.currentTimeRaw, this.fps) || 0
-      if (this.isCurrentEntityPicture) currentTime = 0
+      if (this.isCurrentPreviewPicture) currentTime = 0
       if (!this.annotations) return
       const annotation = this.getAnnotation(currentTime)
       const annotations = this.getNewAnnotations(currentTime, annotation)
@@ -1813,8 +1901,8 @@ export default {
         task_id: entity.preview_file_task_id,
         annotations: entity.preview_file_annotations
       }
-      if (this.isCurrentEntityPicture && this.currentEntityPictureIndex > 0) {
-        const index = this.currentEntityPictureIndex - 1
+      if (this.isCurrentPreviewPicture && this.currentPreviewIndex > 0) {
+        const index = this.currentPreviewIndex - 1
         const previewFile = this.currentEntity.preview_file_previews[index]
         preview = {
           id: previewFile.id,
@@ -1822,10 +1910,12 @@ export default {
           annotations: previewFile.annotations
         }
       }
-      this.$emit('annotationchanged', {
-        preview: preview,
-        annotations: annotations
-      })
+      if (!this.isCurrentUserArtist) {
+        this.$emit('annotationchanged', {
+          preview: preview,
+          annotations: annotations
+        })
+      }
     },
 
     onDeleteClicked () {
@@ -1848,7 +1938,7 @@ export default {
           )
         }
         if (!annotation &&
-          this.isCurrentEntityPicture &&
+          this.isCurrentPreviewPicture &&
           this.annotations.length > 0
         ) {
           annotation = this.annotations[0]
@@ -1903,42 +1993,35 @@ export default {
       this.maxDuration = '00:00.000'
     },
 
-    onPreviousPictureClicked () {
-      const index = this.currentEntityPictureIndex - 1
-      this.currentEntityPictureIndex =
-        index < 0 ? this.currentPicturePreviewLength - 1 : index
+    onPreviousPreviewClicked () {
+      const index = this.currentPreviewIndex - 1
+      this.currentPreviewIndex =
+        index < 0 ? this.currentEntityPreviewLength - 1 : index
     },
 
-    onNextPictureClicked () {
-      const index = this.currentEntityPictureIndex + 1
-      this.currentEntityPictureIndex =
-        index > this.currentPicturePreviewLength - 1 ? 0 : index
+    onNextPreviewClicked () {
+      const index = this.currentPreviewIndex + 1
+      this.currentPreviewIndex =
+        index > this.currentEntityPreviewLength - 1 ? 0 : index
     },
 
     onPreviousComparisonPictureClicked () {
-      const index = this.currentComparisonEntityPictureIndex - 1
-      this.currentComparisonEntityPictureIndex =
-        index < 0 ? this.currentComparisonPicturePreviewLength - 1 : index
+      const index = this.currentComparisonPreviewIndex - 1
+      this.currentComparisonPreviewIndex =
+        index < 0 ? this.currentComparisonPreviewLength - 1 : index
     },
 
     onNextComparisonPictureClicked () {
-      const index = this.currentComparisonEntityPictureIndex + 1
-      this.currentComparisonEntityPictureIndex =
-        index > this.currentComparisonPicturePreviewLength - 1 ? 0 : index
+      const index = this.currentComparisonPreviewIndex + 1
+      this.currentComparisonPreviewIndex =
+        index > this.currentComparisonPreviewLength - 1 ? 0 : index
     },
 
     resetPictureCanvas () {
-      if (this.currentEntityPictureIndex > 0) {
-        this.annotations =
-          this.currentEntity.preview_file_previews[
-            this.currentEntityPictureIndex - 1
-          ].annotations || []
-      } else {
-        this.annotations = this.currentEntity.preview_file_annotations || []
-      }
+      this.annotations = this.currentPreview.annotations
       this.resetCanvas()
         .then(() => {
-          if (this.isCurrentEntityPicture) {
+          if (this.isCurrentPreviewPicture) {
             this.loadAnnotation(this.getAnnotation(0))
           }
         })
@@ -1946,24 +2029,33 @@ export default {
   },
 
   watch: {
-    currentEntityPictureIndex () {
+    currentPreviewIndex () {
       this.resetUndoStacks()
+      this.$nextTick(() => {
+        if (this.isCurrentPreviewPicture) {
+          this.resetPictureCanvas()
+        } else {
+          this.resetCanvas()
+        }
+      })
     },
 
     playingEntityIndex () {
       this.updateTaskPanel()
       this.resetUndoStacks()
-      this.currentEntityPictureIndex = 0
-      this.currentComparisonEntityPictureIndex = 0
+      this.currentPreviewIndex = 0
+      this.currentComparisonPreviewIndex = 0
       if (this.currentEntity) {
         this.annotations = this.currentEntity.preview_file_annotations || []
       }
-      this.resetCanvas()
-        .then(() => {
-          if (this.isCurrentEntityPicture) {
-            this.loadAnnotation(this.getAnnotation(0))
-          }
-        })
+      this.$nextTick(() => {
+        this.resetCanvas()
+          .then(() => {
+            if (!this.isCurrentPreviewPicture) {
+              this.loadAnnotation(this.getAnnotation(0))
+            }
+          })
+      })
     },
 
     isComparing () {
@@ -1972,6 +2064,7 @@ export default {
       }
       this.$nextTick()
         .then(() => {
+          this.resetPictureCanvas()
           this.resetCanvas()
           this.reloadAnnotations()
         })
@@ -1984,8 +2077,8 @@ export default {
     },
 
     entities () {
-      this.currentEntityPictureIndex = 0
-      this.currentComparisonEntityPictureIndex = 0
+      this.currentPreviewIndex = 0
+      this.currentComparisonPreviewuIndex = 0
       this.entityList = Object.values(this.entities)
       this.playingEntityIndex = 0
       this.pause()
@@ -2002,7 +2095,7 @@ export default {
       this.resetHeight()
       this.resetCanvas()
         .then(() => {
-          if (this.isCurrentEntityPicture) {
+          if (this.isCurrentPreview) {
             this.annotations = this.currentEntity.preview_file_annotations
             this.loadAnnotation(this.getAnnotation(0))
           }
@@ -2019,9 +2112,6 @@ export default {
 
     isAddingEntity () {
       this.$nextTick(() => {
-        if (this.picturePlayer && !this.picturePlayer.onload) {
-          this.picturePlayer.onload = this.resetPictureCanvas
-        }
         this.updateProgressBar()
       })
     }
@@ -2334,15 +2424,6 @@ progress {
   }
 }
 
-.separator {
-  margin: .5rem;
-  &:before {
-    content: '';
-    border-left: 1px solid $dark-grey-lightest;
-    height: .5rem;
-  }
-}
-
 .annotation-tools {
   display: flex;
   align-items: stretch;
@@ -2382,7 +2463,7 @@ progress {
   height: inherit;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  flex: 1;
 }
 
 .picture-preview-comparison-wrapper {
@@ -2390,9 +2471,7 @@ progress {
   height: inherit;
   justify-content: center;
   align-items: center;
-  width: 50%;
-  min-width: 50%;
-  max-width: 50%;
+  flex: 1;
 }
 
 .picture-preview {
@@ -2413,7 +2492,7 @@ progress {
 }
 
 .playlist-player a.playlist-button {
-  margin-top: 3px;
+  padding-top: 3px;
   svg {
     width: 18px;
   }

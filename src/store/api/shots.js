@@ -31,9 +31,9 @@ export default {
     return client.getModel('episodes', episodeId)
   },
 
-  getEpisodes (production, callback) {
+  getEpisodes (production) {
     const path = `/api/data/projects/${production.id}/episodes`
-    client.get(path, callback)
+    return client.pget(path)
   },
 
   getShotType (callback) {
@@ -85,7 +85,8 @@ export default {
         fps: shot.fps
       })
     }
-    return client.pput(`/api/data/entities/${shot.id}`, data)
+    const path = `/api/data/entities/${shot.id}`
+    return client.pput(path, data)
   },
 
   updateSequence (sequence) {
@@ -133,6 +134,11 @@ export default {
 
   getEpisodeStats (productionId) {
     return client.pget(`/api/data/projects/${productionId}/episodes/stats`)
+  },
+
+  getEpisodeRetakeStats (productionId) {
+    const path = `/api/data/projects/${productionId}/episodes/retake-stats`
+    return client.pget(path)
   },
 
   loadShotHistory (shotId) {

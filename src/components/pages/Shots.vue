@@ -66,8 +66,8 @@
         <div class="query-list">
           <search-query-list
             :queries="shotSearchQueries"
-            @changesearch="changeSearch"
-            @removesearch="removeSearchQuery"
+            @change-search="changeSearch"
+            @remove-search="removeSearchQuery"
             v-if="!isShotsLoading && !initialLoading"
           />
         </div>
@@ -96,6 +96,7 @@
         @restore-clicked="onRestoreClicked"
         @scroll="saveScrollPosition"
         @shot-history="showShotHistoryModal"
+        @sequence-clicked="onSequenceClicked"
       />
     </div>
   </div>
@@ -167,6 +168,7 @@
     :text="deleteAllTasksText()"
     :error-text="$t('tasks.delete_all_error')"
     :lock-text="deleteAllTasksLockText"
+    :selection-option="true"
     @cancel="modals.isDeleteAllTasksDisplayed = false"
     @confirm="confirmDeleteAllTasks"
   />
@@ -251,7 +253,7 @@ import { mapGetters, mapActions } from 'vuex'
 import csv from '../../lib/csv'
 import func from '../../lib/func'
 import { sortByName } from '../../lib/sorting'
-import { slugify } from '../../lib/string'
+import stringHelpers from '../../lib/string'
 
 import { searchMixin } from '../mixins/search'
 import { entityListMixin } from '../mixins/entities'
@@ -362,6 +364,7 @@ export default {
       'episodes',
       'isCurrentUserClient',
       'isCurrentUserManager',
+      'isFrames',
       'isFrameIn',
       'isFrameOut',
       'isFps',
@@ -474,7 +477,9 @@ export default {
           this.episodes.length > 0 &&
           this.episodes[0].project_id !== this.currentProduction.id
         ) {
-          this.loadEpisodes(finalize)
+          this.loadEpisodes()
+            .then(() => finalize())
+            .catch(console.error)
         } else {
           finalize()
         }
@@ -491,9 +496,10 @@ export default {
   methods: {
     ...mapActions([
       'addMetadataDescriptor',
+      'createTasks',
       'changeShotSort',
       'commentTaskWithPreview',
-      'deleteAllTasks',
+      'deleteAllShotTasks',
       'deleteShot',
       'deleteMetadataDescriptor',
       'editShot',
@@ -501,7 +507,6 @@ export default {
       'hideAssignations',
       'loadEpisodes',
       'loadShots',
-      'loadComment',
       'removeShotSearch',
       'restoreShot',
       'saveShotSearch',
@@ -594,16 +599,15 @@ export default {
         })
     },
 
-    confirmDeleteAllTasks () {
+    confirmDeleteAllTasks (selectionOnly) {
       const taskTypeId = this.taskTypeForTaskDeletion.id
       const projectId = this.currentProduction.id
       this.errors.deleteAllTasks = false
       this.loading.deleteAllTasks = true
-      this.deleteAllTasks({ projectId, taskTypeId })
+      this.deleteAllShotTasks({ projectId, taskTypeId, selectionOnly })
         .then(() => {
           this.loading.deleteAllTasks = false
           this.modals.isDeleteAllTasksDisplayed = false
-          this.loadShots()
         }).catch((err) => {
           console.error(err)
           this.loading.deleteAllTasks = false
@@ -670,35 +674,48 @@ export default {
         })
     },
 
-    confirmCreateTasks (form) {
+    confirmCreateTasks ({ form, selectionOnly }) {
       this.loading.creatingTasks = true
-      this.runTasksCreation(form, () => {
-        this.hideCreateTasksModal()
-        this.loading.creatingTasks = false
-      })
+      this.runTasksCreation(form, selectionOnly)
+        .then(() => {
+          this.reset()
+          this.hideCreateTasksModal()
+          this.loading.creatingTasks = false
+        })
+        .catch(err => {
+          this.errors.creatingTasks = true
+          console.errror(err)
+        })
     },
 
-    confirmCreateTasksAndStay (form) {
+    confirmCreateTasksAndStay ({ form, selectionOnly }) {
       this.loading.creatingTasksStay = true
-      this.runTasksCreation(form, () => {
-        this.loading.creatingTasksStay = false
-      })
+      this.runTasksCreation(form, selectionOnly)
+        .then(() => {
+          this.reset()
+          this.loading.creatingTasksStay = false
+        })
+        .catch(err => {
+          this.errors.creatingTasks = true
+          console.errror(err)
+        })
     },
 
-    runTasksCreation (form, callback) {
+    runTasksCreation (form, selectionOnly) {
       this.errors.creatingTasks = false
-      this.$store.dispatch('createTasks', {
+      return this.createTasks({
         task_type_id: form.task_type_id,
         project_id: this.currentProduction.id,
         type: 'shots',
-        callback: (err) => {
-          if (err) {
-            this.errors.creatingTasks = true
-          } else {
-            this.loadShots()
-          }
-          callback(err)
-        }
+        selectionOnly
+      })
+    },
+
+    reset () {
+      this.initialLoading = true
+      this.loadShots((err) => {
+        if (err) console.error(err)
+        this.initialLoading = false
       })
     },
 
@@ -772,6 +789,7 @@ export default {
         .then(() => {
           this.loading.importing = false
           this.loadEpisodes()
+            .catch(console.error)
           this.hideImportRenderModal()
           this.loadShots()
         })
@@ -797,7 +815,12 @@ export default {
       this.modals.isDeleteAllTasksDisplayed = true
     },
 
-    onSearchChange (event) {
+    onSequenceClicked (sequenceName) {
+      this.searchField.setValue(`${this.shotSearchText} ${sequenceName}`)
+      this.onSearchChange()
+    },
+
+    onSearchChange () {
       const searchQuery = this.searchField.getValue()
       if (searchQuery.length !== 1) {
         this.setShotSearch(searchQuery)
@@ -865,12 +888,15 @@ export default {
           if (this.currentEpisode) {
             nameData.splice(3, 0, this.currentEpisode.name)
           }
-          const name = slugify(nameData.join('_'))
+          const name = stringHelpers.slugify(nameData.join('_'))
           const headers = [
             'Sequence',
             'Name',
             'Description'
           ]
+          if (this.currentEpisode) {
+            headers.splice(0, 0, 'Episode')
+          }
           sortByName([...this.currentProduction.descriptors])
             .filter(d => d.entity_type === 'Shot')
             .forEach((descriptor) => {
@@ -879,7 +905,9 @@ export default {
           if (this.isTime) {
             headers.push('Time spent')
           }
-          headers.push('Nb Frames')
+          if (this.isFrames) {
+            headers.push('Nb Frames')
+          }
           if (this.isFrameIn) {
             headers.push('Frame In')
           }
@@ -892,6 +920,7 @@ export default {
           this.shotValidationColumns
             .forEach((taskTypeId) => {
               headers.push(this.taskTypeMap[taskTypeId].name)
+              headers.push('Assignations')
             })
           csv.buildCsvFile(name, [headers].concat(shotLines))
         })
@@ -938,7 +967,9 @@ export default {
           this.episodes.length > 0 &&
           this.episodes[0].project_id !== this.currentProduction.id
         ) {
-          this.loadEpisodes(finalize)
+          this.loadEpisodes()
+            .then(() => finalize())
+            .catch(console.error)
         } else {
           finalize()
         }

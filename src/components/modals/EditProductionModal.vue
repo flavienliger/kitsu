@@ -57,7 +57,26 @@
           @enter="runConfirmation"
           v-focus
         />
-
+        <text-field v-if="productionToEdit && productionToEdit.id"
+          ref="exportNameField"
+          :label="$t('productions.fields.export_name')"
+          v-model="form.export_name"
+          @enter="runConfirmation"
+          v-focus
+        />
+        <combobox
+          :label="$t('productions.fields.colorspace')"
+          :options="productionColorspaceOptions"
+          @enter="runConfirmation"
+          v-model="form.colorspace"
+        />
+        <text-field v-if="productionToEdit && productionToEdit.id"
+          ref="supervisorField"
+          :label="$t('productions.fields.supervisor')"
+          v-model="form.supervisor"
+          @enter="runConfirmation"
+          v-focus
+        />
         <div v-if="productionToEdit && productionToEdit.id">
           <span class="label">{{ $t("productions.picture") }}</span>
           <file-upload
@@ -125,6 +144,104 @@ export default {
         {
           label: 'tvshow',
           value: 'tvshow'
+        }
+      ],
+      productionColorspaceOptions: [
+        {
+          label: 'linear',
+          value: 'linear'
+        },
+        {
+          label: 'sRGB',
+          value: 'sRGB'
+        },
+        {
+          label: 'Cineon',
+          value: 'Cineon'
+        },
+        {
+          label: 'rec709',
+          value: 'rec709'
+        },
+        {
+          label: 'Gamma1.8',
+          value: 'Gamme1.8'
+        },
+        {
+          label: 'Gamma2.2',
+          value: 'Gamma2.2'
+        },
+        {
+          label: 'Gamma2.4',
+          value: 'Gamma2.4'
+        },
+        {
+          label: 'Panalog',
+          value: 'Panalog'
+        },
+        {
+          label: 'REDLog',
+          value: 'REDLog'
+        },
+        {
+          label: 'ViperLog',
+          value: 'ViperLog'
+        },
+        {
+          label: 'AlexaV3LogC',
+          value: 'AlexaV3LogC'
+        },
+        {
+          label: 'PlogLin',
+          value: 'PlogLin'
+        },
+        {
+          label: 'SLog',
+          value: 'SLog'
+        },
+        {
+          label: 'SLog1',
+          value: 'SLog1'
+        },
+        {
+          label: 'SLog2',
+          value: 'SLog2'
+        },
+        {
+          label: 'SLog3',
+          value: 'SLog3'
+        },
+        {
+          label: 'CLog',
+          value: 'CLog'
+        },
+        {
+          label: 'Protune',
+          value: 'Protune'
+        },
+        {
+          label: 'raw',
+          value: 'raw'
+        },
+        {
+          label: 'ACES - ACES2065-1',
+          value: 'ACES - ACES2065-1'
+        },
+        {
+          label: 'ACES - ACEScc',
+          value: 'ACES - ACEScc'
+        },
+        {
+          label: 'ACES - ACESproxy',
+          value: 'ACES - ACESproxy'
+        },
+        {
+          label: 'ACES - ACEScg',
+          value: 'ACES - ACEScg'
+        },
+        {
+          label: 'Input - ADX - ADX10',
+          value: 'Input - ADX - ADX10'
         }
       ]
     }

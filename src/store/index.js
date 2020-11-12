@@ -20,6 +20,7 @@ import shots from './modules/shots'
 import taskTypes from './modules/tasktypes'
 import taskStatus from './modules/taskstatus'
 import tasks from './modules/tasks'
+import files from './modules/files'
 
 Vue.use(Vuex)
 
@@ -40,7 +41,8 @@ const modules = {
   tasks,
   taskTypes,
   taskStatus,
-  user
+  user,
+  files
 }
 
 export default new Vuex.Store({

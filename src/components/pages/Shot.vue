@@ -108,6 +108,19 @@
       </div>
     </div>
 
+    <div class="versions">
+      <page-subtitle :text="$t('shots.versions')" />
+      <div v-if="currentShot">
+        <div
+          class="output-files"
+          :key="outputFile.id"
+          v-for="outputFile in currentShot.outputFiles"
+        >
+          <entity-thumbnail :entity="outputFile" :empty-height="32" />
+          <span>{{ outputFile.name }} v{{ outputFile.revision }}</span></div>
+      </div>
+    </div>
+
     <div class="shot-casting">
       <page-subtitle :text="$t('shots.casting')" />
       <div v-if="currentShot">
@@ -243,6 +256,7 @@ export default {
     this.casting.isError = false
 
     if (this.currentShot) {
+      this.loadOutputFiles(this.currentShot)
       this.loadShotCasting(this.currentShot)
         .then(() => {
           this.casting.isLoading = false
@@ -306,7 +320,8 @@ export default {
       'editShot',
       'loadAssets',
       'loadShots',
-      'loadShotCasting'
+      'loadShotCasting',
+      'loadOutputFiles'
     ]),
 
     changeTab (tab) {
@@ -348,6 +363,7 @@ export default {
         this.loadAssets()
           .then(() => {
             this.currentShot = this.getCurrentShot()
+            this.loadOutputFiles(this.currentShot)
             return this.loadShotCasting(this.currentShot)
               .then(() => {
                 this.casting.isLoading = false
@@ -387,6 +403,7 @@ export default {
 }
 
 .dark .page-header,
+.dark .versions,
 .dark .shot-casting,
 .dark .infos {
   background: #46494F;
@@ -430,12 +447,13 @@ h2.subtitle {
   }
 }
 
-.shot-casting {
+.shot-casting, .versions {
   margin-left: 1em;
   margin-right: 1em;
   background: white;
   padding: 1em;
   box-shadow: 0px 0px 6px #E0E0E0;
+  margin-bottom: 1em;
 }
 
 .shot-thumbnail {
@@ -505,6 +523,18 @@ h2.subtitle {
 
 .datatable-row {
   user-select: text;
+}
+
+.output-files {
+  vertical-align: top;
+  width: 100px;
+  height: 100px;
+  padding: 1em;
+  margin: 0.8em;
+  display: inline-block;
+  color: white;
+  background: var(--background);
+  overflow: hidden;
 }
 
 @media screen and (max-width: 768px) {
